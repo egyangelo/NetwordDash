@@ -4,23 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="netdash-token" content="__NETDASH_TOKEN__">
-  <meta name="color-scheme" content="dark">
   <title>NetDash</title>
+  <script src="/static/theme.js"></script>
   <link rel="stylesheet" href="/static/style.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 </head>
 <body>
-<div class="aurora" aria-hidden="true"></div>
 
 <div class="shell">
   <header class="topbar">
     <div class="brand">
       <div class="logo" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
              stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="2.2"></circle>
-          <path d="M7.4 8.2a6.4 6.4 0 0 0 0 7.6M16.6 15.8a6.4 6.4 0 0 0 0-7.6"></path>
-          <path d="M4.4 5.2a10.4 10.4 0 0 0 0 13.6M19.6 18.8a10.4 10.4 0 0 0 0-13.6"></path>
+          <circle cx="12" cy="12" r="2.3"></circle>
+          <circle cx="5" cy="5" r="1.6"></circle>
+          <circle cx="19" cy="5" r="1.6"></circle>
+          <circle cx="5" cy="19" r="1.6"></circle>
+          <circle cx="19" cy="19" r="1.6"></circle>
+          <path d="M10.4 10.4 6.3 6.3M13.6 10.4l4.1-4.1M10.4 13.6l-4.1 4.1M13.6 13.6l4.1 4.1"></path>
         </svg>
       </div>
       <div class="brand-text">
@@ -41,12 +43,29 @@
       </button>
     </div>
     <div class="topbar-actions">
+      <div class="appearance" role="group" aria-label="Appearance">
+        <button class="appearance-btn" type="button" data-theme-mode="auto"
+                aria-pressed="false" title="Match the system appearance">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"></path></svg>
+          <span>Auto</span>
+        </button>
+        <button class="appearance-btn" type="button" data-theme-mode="light"
+                aria-pressed="false" title="Light appearance">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"></path></svg>
+          <span>Light</span>
+        </button>
+        <button class="appearance-btn" type="button" data-theme-mode="dark"
+                aria-pressed="false" title="Dark appearance">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.2A8.5 8.5 0 0 1 8.8 4a8.5 8.5 0 1 0 11.2 11.2z"></path></svg>
+          <span>Dark</span>
+        </button>
+      </div>
       <span id="admin-pill" class="pill" hidden>
         <span class="dot"></span><span id="admin-text">Read-only</span>
       </span>
       <button id="refresh-btn" class="btn ghost" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true" class="icon"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4"/></svg>
-        Refresh
+        <span class="btn-label">Refresh</span>
       </button>
       <button id="settings-btn" class="btn ghost icon-only" type="button" aria-label="Settings">
         <svg viewBox="0 0 24 24" aria-hidden="true" class="icon">
@@ -112,49 +131,9 @@
     </section>
 
     <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>DNS filtering</h2>
-          <p class="muted">Applied to this computer's network connection. The Wi-Fi link may blip for a second.</p>
-        </div>
-        <span class="badge" id="dns-badge">—</span>
-      </div>
-      <div class="dns-grid" id="dns-grid" role="radiogroup" aria-label="DNS profile"></div>
-      <p class="hint-line" id="dns-hint"></p>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Internet speed</h2>
-          <p class="muted">Ping, download and upload against Cloudflare's public test endpoints. Uses a few MB of data.</p>
-        </div>
-        <button id="speedtest-btn" class="btn primary" type="button">Run speed test</button>
-      </div>
-      <div class="speed-grid">
-        <div class="speed-card ping">
-          <span class="speed-label">Ping</span>
-          <div class="speed-metric"><span class="speed-value" id="speed-ping">—</span><span class="speed-unit">ms</span></div>
-          <span class="speed-foot" id="speed-jitter"></span>
-        </div>
-        <div class="speed-card download">
-          <span class="speed-label">Download</span>
-          <div class="speed-metric"><span class="speed-value" id="speed-down">—</span><span class="speed-unit">Mbps</span></div>
-          <span class="speed-foot">Cloudflare</span>
-        </div>
-        <div class="speed-card upload">
-          <span class="speed-label">Upload</span>
-          <div class="speed-metric"><span class="speed-value" id="speed-up">—</span><span class="speed-unit">Mbps</span></div>
-          <span class="speed-foot" id="speed-foot-note"></span>
-        </div>
-      </div>
-      <p class="hint-line" id="speed-phase">Not tested yet.</p>
-    </section>
-
-    <section class="panel">
       <div class="panel-head devices-head">
         <div>
-          <h2>Connected devices</h2>
+          <h2>Devices</h2>
           <p class="muted" id="devices-sub">Scanning the local network…</p>
         </div>
         <div class="device-tools">
@@ -198,6 +177,46 @@
         <p id="empty-text">No devices found yet.</p>
       </div>
       <p class="hint-line" id="access-note"></p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>DNS filtering</h2>
+          <p class="muted">Applies to this computer. The connection may blip for a second.</p>
+        </div>
+        <span class="badge" id="dns-badge">—</span>
+      </div>
+      <div class="dns-grid" id="dns-grid" role="radiogroup" aria-label="DNS profile"></div>
+      <p class="hint-line" id="dns-hint"></p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Internet speed</h2>
+          <p class="muted">Ping, download and upload via Cloudflare. Uses a few MB.</p>
+        </div>
+        <button id="speedtest-btn" class="btn primary" type="button">Run speed test</button>
+      </div>
+      <div class="speed-grid">
+        <div class="speed-card ping">
+          <span class="speed-label">Ping</span>
+          <div class="speed-metric"><span class="speed-value" id="speed-ping">—</span><span class="speed-unit">ms</span></div>
+          <span class="speed-foot" id="speed-jitter"></span>
+        </div>
+        <div class="speed-card download">
+          <span class="speed-label">Download</span>
+          <div class="speed-metric"><span class="speed-value" id="speed-down">—</span><span class="speed-unit">Mbps</span></div>
+          <span class="speed-foot">Cloudflare</span>
+        </div>
+        <div class="speed-card upload">
+          <span class="speed-label">Upload</span>
+          <div class="speed-metric"><span class="speed-value" id="speed-up">—</span><span class="speed-unit">Mbps</span></div>
+          <span class="speed-foot" id="speed-foot-note"></span>
+        </div>
+      </div>
+      <p class="hint-line" id="speed-phase">Not tested yet.</p>
     </section>
   </main>
 
@@ -254,21 +273,21 @@
 
       <div class="scene-legend" id="scene-legend" role="group" aria-label="Focus by device type">
         <span class="legend-title">Focus</span>
-        <button class="legend-item" type="button" data-type="router" aria-pressed="false" style="--c:#a78bfa"><i></i>Router</button>
-        <button class="legend-item" type="button" data-type="computer" aria-pressed="false" style="--c:#38bdf8"><i></i>Desktop</button>
-        <button class="legend-item" type="button" data-type="laptop" aria-pressed="false" style="--c:#22d3ee"><i></i>Laptop</button>
-        <button class="legend-item" type="button" data-type="tablet" aria-pressed="false" style="--c:#818cf8"><i></i>Tablet</button>
-        <button class="legend-item" type="button" data-type="phone" aria-pressed="false" style="--c:#60a5fa"><i></i>Phone</button>
-        <button class="legend-item" type="button" data-type="tv" aria-pressed="false" style="--c:#e879f9"><i></i>TV</button>
-        <button class="legend-item" type="button" data-type="camera" aria-pressed="false" style="--c:#f43f5e"><i></i>Camera</button>
-        <button class="legend-item" type="button" data-type="light" aria-pressed="false" style="--c:#fde047"><i></i>Light</button>
-        <button class="legend-item" type="button" data-type="xbox" aria-pressed="false" style="--c:#4ade80"><i></i>Xbox</button>
-        <button class="legend-item" type="button" data-type="playstation" aria-pressed="false" style="--c:#3b82f6"><i></i>PS</button>
-        <button class="legend-item" type="button" data-type="console" aria-pressed="false" style="--c:#86efac"><i></i>Console</button>
-        <button class="legend-item" type="button" data-type="speaker" aria-pressed="false" style="--c:#fb923c"><i></i>Speaker</button>
-        <button class="legend-item" type="button" data-type="printer" aria-pressed="false" style="--c:#fb7185"><i></i>Printer</button>
-        <button class="legend-item" type="button" data-type="iot" aria-pressed="false" style="--c:#fbbf24"><i></i>IoT</button>
-        <button class="legend-item" type="button" data-type="other" aria-pressed="false" style="--c:#94a3b8"><i></i>Other</button>
+        <button class="legend-item" type="button" data-type="router" aria-pressed="false"><i></i>Router</button>
+        <button class="legend-item" type="button" data-type="computer" aria-pressed="false"><i></i>Desktop</button>
+        <button class="legend-item" type="button" data-type="laptop" aria-pressed="false"><i></i>Laptop</button>
+        <button class="legend-item" type="button" data-type="tablet" aria-pressed="false"><i></i>Tablet</button>
+        <button class="legend-item" type="button" data-type="phone" aria-pressed="false"><i></i>Phone</button>
+        <button class="legend-item" type="button" data-type="tv" aria-pressed="false"><i></i>TV</button>
+        <button class="legend-item" type="button" data-type="camera" aria-pressed="false"><i></i>Camera</button>
+        <button class="legend-item" type="button" data-type="light" aria-pressed="false"><i></i>Light</button>
+        <button class="legend-item" type="button" data-type="xbox" aria-pressed="false"><i></i>Xbox</button>
+        <button class="legend-item" type="button" data-type="playstation" aria-pressed="false"><i></i>PS</button>
+        <button class="legend-item" type="button" data-type="console" aria-pressed="false"><i></i>Console</button>
+        <button class="legend-item" type="button" data-type="speaker" aria-pressed="false"><i></i>Speaker</button>
+        <button class="legend-item" type="button" data-type="printer" aria-pressed="false"><i></i>Printer</button>
+        <button class="legend-item" type="button" data-type="iot" aria-pressed="false"><i></i>IoT</button>
+        <button class="legend-item" type="button" data-type="other" aria-pressed="false"><i></i>Other</button>
         <button class="legend-clear" id="legend-clear" type="button" title="Show all device types" hidden>Clear</button>
       </div>
 
@@ -330,6 +349,18 @@
         <input id="scan-interval" type="number" min="10" max="600" step="5" value="45">
       </label>
       <button id="save-settings" class="btn" type="button">Save settings</button>
+    </section>
+
+    <section class="field-group">
+      <h3>Display</h3>
+      <label class="check">
+        <input id="show-mac" type="checkbox" checked>
+        <span>Show device MAC addresses</span>
+      </label>
+      <p class="muted small">
+        When off, MAC addresses are masked and revealed only while you hover,
+        tap or focus them. Applies to this browser.
+      </p>
     </section>
 
     <section class="field-group">

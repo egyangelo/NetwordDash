@@ -11,22 +11,22 @@ browser.
 
 ## Quick start
 
+Run the launcher in the repository root:
+
 ```bash
 # Linux
-python3 app.py
+./linux-run.sh
 
 # Windows
-py -3 app.py
+windows-run.bat
 ```
 
 The dashboard opens at <http://127.0.0.1:8765/>. The server binds to localhost
-only.
-
-Options:
+only. Both launchers pass their arguments through, so:
 
 ```bash
-python3 app.py --port 9000     # use another port
-python3 app.py --no-browser    # do not open a browser
+./linux-run.sh --port 9000     # use another port
+./linux-run.sh --no-browser    # do not open a browser
 ```
 
 Requires Python 3.10 or newer. Everything else is part of the standard library.
@@ -37,10 +37,12 @@ Requires Python 3.10 or newer. Everything else is part of the standard library.
 | --- | --- |
 | Connection | SSID, security, signal strength, link rate, channel, interface, MAC, local IP |
 | Traffic | Total received/sent bytes for the active interface |
+| Appearance | Light and dark themes, or follow the system; remembered per browser |
 | Devices | Ping sweep + ARP/neighbour table, vendor lookup from the bundled IEEE OUI registry, best-effort hostnames |
 | 3D map | Navigable perspective view: router and devices as shapes, animated links, click-to-inspect details, per-link internet switch |
 | Device types | Auto-detected from hostname and vendor, with a manual per-device type override |
 | Labels | Custom device names keyed to the MAC address, stored locally |
+| Privacy | Optional masking of device MAC addresses; hover, tap or focus reveals one |
 | Sorting | Sort the table by Device, Address, Type, or Status; click again to reverse |
 | DNS | Switch between Automatic (DHCP), Google, FamilyShield, AdGuard, Cloudflare Malware and Cloudflare Family |
 | Speed test | Ping/jitter, download and upload against Cloudflare's public speed endpoints |
@@ -62,6 +64,12 @@ Labels are keyed to the normalized MAC address and stored in
 are local to NetDash and are never written to the router. The search box matches
 labels too. When a label names a device clearly (`Smart Light`, `Samsung TV`,
 `Xbox`, `DoorBell`), the 3D map uses it to pick the matching figure.
+
+## Appearance
+
+Use the **Auto / Light / Dark** switch in the header. Auto follows the operating
+system and updates live if it changes; Light and Dark stay put. The choice is
+stored in the browser, and the 3D map re-themes with the rest of the page.
 
 ## 3D network map
 
@@ -129,7 +137,7 @@ Windows. The connection is re-applied, so expect a one-second blip.
 
 Changing DNS needs administrator rights:
 
-- **Linux:** start the app with `sudo python3 app.py`, or let your desktop's
+- **Linux:** start the app with `sudo ./linux-run.sh`, or let your desktop's
   PolicyKit prompt appear (works on most Mint/Ubuntu setups).
 - **Windows:** run the terminal as Administrator.
 
@@ -180,8 +188,8 @@ filter settings afterwards.
 Other ZTE firmware may use different page names; those switches stay locked
 instead of writing blindly.
 
-If a switch stays locked, run `python3 app.py --diagnose` and inspect
-`router-diagnostics.json`. It contains the raw access-control responses (no
+If a switch stays locked, run `./linux-run.sh --diagnose` and inspect
+`app/router-diagnostics.json`. It contains the raw access-control responses (no
 passwords) needed to support another firmware variant.
 
 ARP spoofing and Wi-Fi deauthentication would also work, but they are attacks
@@ -213,24 +221,28 @@ loopback, so you can deny the public-network prompt.
 ## Project layout
 
 ```
-app.py                     entry point
-netdash/
-  api.py                   application state + JSON API
-  server.py                local HTTP server, token auth, static files
-  netinfo.py               connection details (Linux + Windows)
-  scanner.py               ping sweep, ARP table, vendor lookup
-  dnsman.py                DNS profiles and apply/verify
-  router/
-    base.py                adapter interface
-    zte.py                 ZTE F-series adapter (login, client list)
-  static/                  HTML, CSS, vanilla JS
-  data/oui.txt             IEEE OUI registry (offline vendor lookup)
+linux-run.sh               Linux launcher
+windows-run.bat            Windows launcher
+app/
+  app.py                   entry point
+  netdash/
+    api.py                 application state + JSON API
+    server.py              local HTTP server, token auth, static files
+    netinfo.py             connection details (Linux + Windows)
+    scanner.py             ping sweep, ARP table, vendor lookup
+    dnsman.py              DNS profiles and apply/verify
+    router/
+      base.py              adapter interface
+      zte.py               ZTE F-series adapter (login, client list)
+    static/                HTML, CSS, vanilla JS
+    data/oui.txt           IEEE OUI registry (offline vendor lookup)
+  build_pyz.sh             builds netdash.pyz from the sources
 ```
 
 ## Troubleshooting
 
 **"Could not change DNS" / permission error** — run the app as root
-(`sudo python3 app.py`) or as Administrator on Windows.
+(`sudo ./linux-run.sh`) or as Administrator on Windows.
 
 **No devices appear** — some networks isolate clients (AP isolation). The scan
 can only see hosts that answer ping or appear in the ARP table.

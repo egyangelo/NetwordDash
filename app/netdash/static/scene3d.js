@@ -23,22 +23,57 @@
     && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const TYPES = {
-    router: { color: "#a78bfa", name: "Router" },
-    self: { color: "#2dd4bf", name: "This computer" },
-    computer: { color: "#38bdf8", name: "Desktop PC" },
-    laptop: { color: "#22d3ee", name: "Laptop" },
-    tablet: { color: "#818cf8", name: "Tablet" },
-    phone: { color: "#60a5fa", name: "Phone" },
-    tv: { color: "#e879f9", name: "TV" },
-    camera: { color: "#f43f5e", name: "Camera" },
-    light: { color: "#fde047", name: "Smart light" },
-    xbox: { color: "#4ade80", name: "Xbox" },
-    playstation: { color: "#3b82f6", name: "PlayStation" },
-    speaker: { color: "#fb923c", name: "Speaker" },
-    printer: { color: "#fb7185", name: "Printer" },
-    console: { color: "#86efac", name: "Console" },
-    iot: { color: "#fbbf24", name: "IoT device" },
-    other: { color: "#94a3b8", name: "Device" },
+    router: { color: "#b39cff", lightColor: "#6941e6", name: "Router" },
+    self: { color: "#2dd4bf", lightColor: "#0f8a7a", name: "This computer" },
+    computer: { color: "#67b7ff", lightColor: "#0b6bcb", name: "Desktop PC" },
+    laptop: { color: "#4fd1e3", lightColor: "#0a7f8f", name: "Laptop" },
+    tablet: { color: "#9d8cff", lightColor: "#5b4bd6", name: "Tablet" },
+    phone: { color: "#6aa9ff", lightColor: "#0b63ce", name: "Phone" },
+    tv: { color: "#e879f9", lightColor: "#b21bb5", name: "TV" },
+    camera: { color: "#ff6b8b", lightColor: "#c81e4a", name: "Camera" },
+    light: { color: "#ffd166", lightColor: "#a16207", name: "Smart light" },
+    xbox: { color: "#5ee08a", lightColor: "#15803d", name: "Xbox" },
+    playstation: { color: "#8b8cff", lightColor: "#3f51e0", name: "PlayStation" },
+    speaker: { color: "#ff9f5a", lightColor: "#c2410c", name: "Speaker" },
+    printer: { color: "#ff8fa3", lightColor: "#be123c", name: "Printer" },
+    console: { color: "#86efac", lightColor: "#166534", name: "Console" },
+    iot: { color: "#f8c14a", lightColor: "#b45309", name: "IoT device" },
+    other: { color: "#9a9aa6", lightColor: "#6b6b75", name: "Device" },
+  };
+
+  const SCENE_PALETTES = {
+    dark: {
+      labelBg: "rgba(16, 16, 19, 0.9)",
+      labelBgMuted: "rgba(16, 16, 19, 0.64)",
+      labelText: "#f3f0eb",
+      labelMuted: "#a6a1aa",
+      grid: "rgba(255, 255, 255, 0.055)",
+      ring: "rgba(255, 255, 255, 0.1)",
+      ringSoft: "rgba(255, 255, 255, 0.06)",
+      shadow: "rgba(0, 0, 0, 0.45)",
+      dim: "#77727e",
+      floorGlow: "rgba(255, 92, 77, 0.1)",
+      floorGlowSoft: "rgba(255, 255, 255, 0.04)",
+      beam: "rgba(255, 92, 77, 0.22)",
+      plugBg: "rgba(16, 16, 19, 0.96)",
+      reconnect: "#4ade80",
+    },
+    light: {
+      labelBg: "rgba(255, 253, 248, 0.94)",
+      labelBgMuted: "rgba(255, 253, 248, 0.72)",
+      labelText: "#201e23",
+      labelMuted: "#6e6975",
+      grid: "rgba(31, 29, 34, 0.06)",
+      ring: "rgba(31, 29, 34, 0.1)",
+      ringSoft: "rgba(31, 29, 34, 0.055)",
+      shadow: "rgba(50, 40, 25, 0.18)",
+      dim: "#8d8793",
+      floorGlow: "rgba(217, 58, 32, 0.1)",
+      floorGlowSoft: "rgba(31, 29, 34, 0.03)",
+      beam: "rgba(31, 29, 34, 0.18)",
+      plugBg: "rgba(255, 253, 248, 0.96)",
+      reconnect: "#15803d",
+    },
   };
 
   const BLOCK_COLOR = "#f87171";
@@ -94,10 +129,19 @@
     ctx.closePath();
   }
 
-  function styleFor(device) {
-    if (device && device.is_gateway) return TYPES.router;
-    if (device && device.is_self) return TYPES.self;
-    return TYPES[device && device.type] || TYPES.other;
+  function typeColor(key, theme = "dark") {
+    const entry = TYPES[key] || TYPES.other;
+    return theme === "light" ? (entry.lightColor || entry.color) : entry.color;
+  }
+
+  function styleFor(device, theme = "dark") {
+    const key = device && device.is_gateway
+      ? "router"
+      : device && device.is_self
+        ? "self"
+        : (device && device.type) || "other";
+    const entry = TYPES[key] || TYPES.other;
+    return { ...entry, color: typeColor(key, theme) };
   }
 
   function nodeKey(device) {
@@ -847,6 +891,8 @@
     let canWifi = false;
     let selectedKey = "";
     let focusTypes = [];
+    let themeName = "dark";
+    let palette = SCENE_PALETTES.dark;
     let hoverHit = null;
     const nodeHits = [];
     const linkHits = [];
@@ -855,6 +901,8 @@
     const pointers = new Map();
     let drag = null;
     let pinch = null;
+    let lastDragSample = null;
+    const orbitInertia = { yaw: 0, pitch: 0 };
     let needsFit = true;
     let userAdjusted = false;
     let lastSatelliteCount = -1;
@@ -933,6 +981,8 @@
       canWifi = !!payload.canWifi;
       deviceList = payload.devices || [];
       focusTypes = Array.isArray(payload.focusTypes) ? payload.focusTypes.slice() : [];
+      themeName = payload.theme === "light" ? "light" : "dark";
+      palette = SCENE_PALETTES[themeName];
       const hideOffline = !!payload.hideOffline;
 
       routerNode = makeRouterNode();
@@ -1120,7 +1170,7 @@
           const pa = project(a);
           const pb = project(b);
           if (!pa || !pb) continue;
-          ctx.strokeStyle = rgba("#2dd4bf", 0.075);
+          ctx.strokeStyle = palette.grid;
           ctx.beginPath();
           ctx.moveTo(pa.x, pa.y);
           ctx.lineTo(pb.x, pb.y);
@@ -1149,7 +1199,7 @@
             ctx.lineTo(point.x, point.y);
           }
         }
-        ctx.strokeStyle = rgba("#a78bfa", radius === 5.2 ? 0.22 : 0.12);
+        ctx.strokeStyle = radius === 5.2 ? palette.ring : palette.ringSoft;
         ctx.stroke();
       }
 
@@ -1158,9 +1208,9 @@
         const rx = 4.6 * center.scale;
         const ry = Math.max(2, rx * Math.max(0.16, Math.sin(cam.pitch)));
         const glow = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, rx);
-        glow.addColorStop(0, "rgba(167, 139, 250, 0.22)");
-        glow.addColorStop(0.55, "rgba(45, 212, 191, 0.09)");
-        glow.addColorStop(1, "rgba(45, 212, 191, 0)");
+        glow.addColorStop(0, palette.floorGlow);
+        glow.addColorStop(0.55, palette.floorGlowSoft);
+        glow.addColorStop(1, "rgba(0, 0, 0, 0)");
         ctx.save();
         ctx.translate(center.x, center.y);
         ctx.scale(1, ry / rx);
@@ -1180,8 +1230,8 @@
       const rx = node.size * base.scale * 1.05 * lift;
       const ry = Math.max(1.5, rx * Math.max(0.12, Math.sin(cam.pitch)) * 0.85);
       ctx.save();
-      ctx.globalAlpha = node.device.online === false ? 0.1 : 0.26;
-      ctx.fillStyle = "#000";
+      ctx.globalAlpha = node.device.online === false ? 0.4 : 1;
+      ctx.fillStyle = palette.shadow;
       ctx.beginPath();
       ctx.ellipse(base.x, base.y, rx, ry, 0, 0, TAU);
       ctx.fill();
@@ -1210,13 +1260,13 @@
         const pc = project(control);
         if (!pa || !pb || !pc) continue;
 
-        const style = styleFor(node.device);
+        const style = styleFor(node.device, themeName);
         const blocked = !!node.device.blocked;
         const offline = node.device.online === false;
         const hovered = hoverHit && hoverHit.type === "link" && hoverHit.key === node.key;
         const selected = node.key === selectedKey;
         const emphasized = isFocused(node.device) || hovered || selected;
-        const color = emphasized ? (blocked ? BLOCK_COLOR : style.color) : "#64748b";
+        const color = emphasized ? (blocked ? BLOCK_COLOR : style.color) : palette.dim;
 
         ctx.save();
         ctx.lineCap = "round";
@@ -1291,8 +1341,8 @@
       const bottom = project(vec(routerNode.animated.x, FLOOR_Y, routerNode.animated.z));
       if (top && bottom) {
         const beam = ctx.createLinearGradient(top.x, top.y, bottom.x, bottom.y);
-        beam.addColorStop(0, "rgba(167, 139, 250, 0.28)");
-        beam.addColorStop(1, "rgba(167, 139, 250, 0)");
+        beam.addColorStop(0, palette.beam);
+        beam.addColorStop(1, "rgba(0, 0, 0, 0)");
         ctx.strokeStyle = beam;
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1316,7 +1366,7 @@
       }
 
       roundedRect(ctx, -4.6, -1.6, 9.2, 7.2, 2.2);
-      ctx.fillStyle = "rgba(7, 12, 18, 0.96)";
+      ctx.fillStyle = palette.plugBg;
       ctx.fill();
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.8;
@@ -1334,7 +1384,7 @@
         ctx.lineTo(0, 8.2);
         ctx.stroke();
       };
-      strokeParts(4.6, "rgba(7, 12, 18, 0.95)");
+      strokeParts(4.6, palette.plugBg);
       strokeParts(1.8, color);
       ctx.restore();
     }
@@ -1350,7 +1400,7 @@
           && device.online !== false
           && !device.is_self
           && !device.is_gateway;
-        drawPlugGlyph(hit.mid.x, hit.mid.y, enabled ? "#4ade80" : "#64748b", enabled, hovered);
+        drawPlugGlyph(hit.mid.x, hit.mid.y, enabled ? palette.reconnect : palette.dim, enabled, hovered);
       }
     }
 
@@ -1394,7 +1444,7 @@
       labelRects.push(rect);
 
       roundedRect(ctx, boxX, boxY, boxW, boxH, 8);
-      ctx.fillStyle = active ? "rgba(12, 20, 29, 0.94)" : "rgba(8, 13, 20, 0.72)";
+      ctx.fillStyle = active ? palette.labelBg : palette.labelBgMuted;
       ctx.fill();
       ctx.strokeStyle = rgba(color, active ? 0.75 : (online ? 0.3 : 0.16));
       ctx.lineWidth = 1;
@@ -1406,12 +1456,12 @@
       ctx.fill();
 
       ctx.font = `600 11.5px ${FONT}`;
-      ctx.fillStyle = online ? "#e8eff6" : "#8fa0b3";
+      ctx.fillStyle = online ? palette.labelText : palette.labelMuted;
       ctx.fillText(name, boxX + 16, boxY + (compact ? 10.5 : 12));
 
       if (sub) {
         ctx.font = `10px ${MONO}`;
-        ctx.fillStyle = device.online === false ? "#64748b" : "#8fa0b3";
+        ctx.fillStyle = palette.labelMuted;
         ctx.fillText(sub, boxX + 9, boxY + 25);
       }
       ctx.restore();
@@ -1419,13 +1469,13 @@
 
     function drawNode(node, point) {
       const device = node.device;
-      const style = styleFor(device);
+      const style = styleFor(device, themeName);
       const s = node.size * point.scale;
       const online = device.online !== false;
       const selected = node.key === selectedKey;
       const hovered = hoverHit && hoverHit.type === "node" && hoverHit.key === node.key;
       const emphasized = isFocused(device) || selected || hovered;
-      const color = emphasized ? style.color : "#64748b";
+      const color = emphasized ? style.color : palette.dim;
 
       ctx.save();
       const dimAlpha = node.isRouter ? 0.5 : 0.22;
@@ -1619,7 +1669,7 @@
           title: device.label || device.name || device.vendor || device.ip || "Device",
           subtitle: device.is_gateway
             ? "Router · click for details"
-            : `${styleFor(device).name}${device.ip ? ` · ${device.ip}` : ""} · click for details`,
+            : `${styleFor(device, themeName).name}${device.ip ? ` · ${device.ip}` : ""} · click for details`,
           tone: "accent",
         });
       }
@@ -1635,6 +1685,9 @@
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
       if (pointers.size === 1) {
+        orbitInertia.yaw = 0;
+        orbitInertia.pitch = 0;
+        lastDragSample = { x: event.clientX, y: event.clientY, t: performance.now() };
         drag = {
           x: event.clientX,
           y: event.clientY,
@@ -1649,6 +1702,7 @@
         const [a, b] = [...pointers.values()];
         pinch = { distance: Math.hypot(a.x - b.x, a.y - b.y) || 1 };
         drag = null;
+        lastDragSample = null;
       }
     }
 
@@ -1692,7 +1746,15 @@
         cam.target.y -= (camera.right.y * dx - camera.up.y * dy) * panScale;
         cam.target.z -= (camera.right.z * dx - camera.up.z * dy) * panScale;
         cam.goalTarget = vec(cam.target.x, cam.target.y, cam.target.z);
+        lastDragSample = null;
       } else {
+        const now = performance.now();
+        if (lastDragSample) {
+          const sampleDt = Math.max(0.008, (now - lastDragSample.t) / 1000);
+          orbitInertia.yaw = clamp((-dx * 0.0065) / sampleDt, -8, 8);
+          orbitInertia.pitch = clamp((dy * 0.0055) / sampleDt, -6, 6);
+        }
+        lastDragSample = { x: event.clientX, y: event.clientY, t: now };
         cam.yaw -= dx * 0.0065;
         cam.pitch = clamp(cam.pitch + dy * 0.0055, 0.08, 1.24);
       }
@@ -1706,9 +1768,22 @@
         return;
       }
       const wasClick = !drag.moved;
+      const wasPan = drag.pan;
       drag = null;
+      lastDragSample = null;
       canvas.style.cursor = "grab";
-      if (!wasClick) return;
+      if (!wasClick) {
+        if (wasPan || REDUCED_MOTION || autoRotate) {
+          orbitInertia.yaw = 0;
+          orbitInertia.pitch = 0;
+        } else {
+          orbitInertia.yaw *= 0.18;
+          orbitInertia.pitch *= 0.18;
+        }
+        return;
+      }
+      orbitInertia.yaw = 0;
+      orbitInertia.pitch = 0;
 
       const rect = canvas.getBoundingClientRect();
       const hit = pick(event.clientX - rect.left, event.clientY - rect.top);
@@ -1734,8 +1809,11 @@
     function onWheel(event) {
       event.preventDefault();
       userAdjusted = true;
-      cam.dist = clamp(cam.dist * Math.exp(event.deltaY * 0.0012), MIN_DIST, MAX_DIST);
-      cam.goalDist = cam.dist;
+      cam.goalDist = clamp(
+        cam.goalDist * Math.exp(event.deltaY * 0.0012),
+        MIN_DIST,
+        MAX_DIST,
+      );
     }
 
     function onKeyDown(event) {
@@ -1746,9 +1824,9 @@
         case "ArrowUp": cam.pitch = clamp(cam.pitch + step * 0.7, 0.08, 1.24); break;
         case "ArrowDown": cam.pitch = clamp(cam.pitch - step * 0.7, 0.08, 1.24); break;
         case "+":
-        case "=": cam.dist = clamp(cam.dist * 0.9, MIN_DIST, MAX_DIST); cam.goalDist = cam.dist; break;
+        case "=": cam.goalDist = clamp(cam.goalDist * 0.9, MIN_DIST, MAX_DIST); break;
         case "-":
-        case "_": cam.dist = clamp(cam.dist * 1.1, MIN_DIST, MAX_DIST); cam.goalDist = cam.dist; break;
+        case "_": cam.goalDist = clamp(cam.goalDist * 1.1, MIN_DIST, MAX_DIST); break;
         case "0":
         case "r":
         case "R": reset(); break;
@@ -1764,7 +1842,24 @@
       lastTime = now;
       elapsed += dt;
 
-      if (autoRotate && !REDUCED_MOTION) cam.yaw += dt * 0.16;
+      if (autoRotate && !REDUCED_MOTION) {
+        cam.yaw += dt * 0.16;
+      } else if (!REDUCED_MOTION) {
+        if (Math.abs(orbitInertia.yaw) > 0.002) {
+          cam.yaw += orbitInertia.yaw * dt;
+          orbitInertia.yaw *= Math.exp(-dt * 4.5);
+        } else {
+          orbitInertia.yaw = 0;
+        }
+        if (Math.abs(orbitInertia.pitch) > 0.002) {
+          const nextPitch = clamp(cam.pitch + orbitInertia.pitch * dt, 0.08, 1.24);
+          if (nextPitch <= 0.081 || nextPitch >= 1.239) orbitInertia.pitch = 0;
+          cam.pitch = nextPitch;
+          orbitInertia.pitch *= Math.exp(-dt * 4.5);
+        } else {
+          orbitInertia.pitch = 0;
+        }
+      }
 
       if (needsFit) {
         needsFit = false;
@@ -1838,11 +1933,14 @@
     function zoomBy(factor) {
       userAdjusted = true;
       cam.goalDist = clamp(cam.goalDist * factor, MIN_DIST, MAX_DIST);
-      cam.dist = clamp(cam.dist * factor, MIN_DIST, MAX_DIST);
     }
 
     function setAutoRotate(value) {
       autoRotate = !!value;
+      if (autoRotate) {
+        orbitInertia.yaw = 0;
+        orbitInertia.pitch = 0;
+      }
     }
 
     canvas.style.cursor = "grab";
@@ -1878,5 +1976,5 @@
     };
   }
 
-  window.NetDash3D = { create, TYPES };
+  window.NetDash3D = { create, TYPES, typeColor };
 })();

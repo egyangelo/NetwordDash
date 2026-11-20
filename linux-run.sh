@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/app"
 
 PY=python3
 if ! command -v "$PY" >/dev/null 2>&1; then

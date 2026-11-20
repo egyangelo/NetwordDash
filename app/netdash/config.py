@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-import stat
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -64,13 +64,22 @@ def load() -> dict[str, Any]:
 def save(data: dict[str, Any]) -> None:
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    payload = json.dumps(data, indent=2).encode("utf-8")
+    # The file holds the router password, so it must be owner-only from the
+    # first byte: mkstemp creates it 0600, unlike write_text() (0644 under the
+    # default umask) followed by a chmod.
+    fd, tmp_name = tempfile.mkstemp(prefix=".config-", suffix=".tmp", dir=path.parent)
+    tmp = Path(tmp_name)
     try:
-        os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)  # 0600
-    except OSError:
-        pass
-    os.replace(tmp, path)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 def get_router_credentials() -> tuple[str, str, str]:

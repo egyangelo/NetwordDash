@@ -55,6 +55,7 @@
     speedFootNote: $("#speed-foot-note"),
     speedPhase: $("#speed-phase"),
     scanInterval: $("#scan-interval"),
+    showMac: $("#show-mac"),
     configPath: $("#config-path"),
     toasts: $("#toasts"),
     dialog: $("#confirm-dialog"),
@@ -81,6 +82,7 @@
     sceneLegend: $("#scene-legend"),
     legendItems: document.querySelectorAll(".legend-item"),
     legendClear: $("#legend-clear"),
+    appearanceButtons: document.querySelectorAll(".appearance-btn"),
     nodePanel: $("#node-panel"),
   };
 
@@ -104,6 +106,9 @@
     hideOffline: false,
     focusTypes: [],
     devicesLoaded: false,
+    showMac: true,
+    theme: "dark",
+    themeMode: "auto",
   };
 
   // ---------------------------------------------------------------- helpers
@@ -216,6 +221,50 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  const MAC_MASK = "••:••:••:••:••:••";
+
+  // A MAC address identifies one physical device, so it is masked unless the
+  // user opts in. Masked values keep the same width as the real address and
+  // reveal on hover, tap or keyboard focus, so they stay usable on demand.
+  function macMarkup(mac, fallback = "—") {
+    const value = String(mac || "").trim();
+    if (!value) return escapeHtml(fallback);
+    if (state.showMac) return escapeHtml(value);
+    return `<span class="mac-value masked" tabindex="0" role="button" aria-pressed="false" aria-label="Show MAC address" title="Show MAC address"><span class="mac-real">${escapeHtml(value)}</span><span class="mac-mask" aria-hidden="true">${MAC_MASK}</span></span>`;
+  }
+
+  // Text-only variant for toasts, which use textContent.
+  function macText(mac) {
+    const value = String(mac || "").trim();
+    if (!value) return "";
+    return state.showMac ? value : MAC_MASK;
+  }
+
+  function toggleMacReveal(node) {
+    const revealed = node.classList.toggle("is-revealed");
+    const label = revealed ? "Hide MAC address" : "Show MAC address";
+    node.setAttribute("aria-pressed", revealed ? "true" : "false");
+    node.setAttribute("aria-label", label);
+    node.title = label;
+  }
+
+  function applyShowMac(show, options = {}) {
+    const { persist = true } = options;
+    state.showMac = !!show;
+    if (ui.showMac) ui.showMac.checked = state.showMac;
+    if (persist) {
+      try {
+        localStorage.setItem("netdash-show-mac", state.showMac ? "1" : "0");
+      } catch (error) {
+        /* private mode: remembering the choice is optional */
+      }
+    }
+    const net = (state.snapshot && state.snapshot.network) || {};
+    ui.ovMac.innerHTML = macMarkup(net.mac, "No MAC address");
+    renderDevices(state.lastPayload || { devices: state.devices, scanned_at: 0, subnet: "" });
+    refreshNodePanel();
   }
 
   // ------------------------------------------------------------------ icons
@@ -343,7 +392,7 @@
     }
 
     ui.ovIp.textContent = net.ip ? `${net.ip}${net.prefix ? `/${net.prefix}` : ""}` : "—";
-    ui.ovMac.textContent = net.mac || "No MAC address";
+    ui.ovMac.innerHTML = macMarkup(net.mac, "No MAC address");
     const traffic = [];
     if (net.rx_bytes !== undefined) traffic.push(`↓ ${fmtBytes(net.rx_bytes)}`);
     if (net.tx_bytes !== undefined) traffic.push(`↑ ${fmtBytes(net.tx_bytes)}`);
@@ -417,8 +466,8 @@
     }
 
     ui.dnsHint.textContent =
-      "The active connection is re-applied after a change, so expect a brief pause. " +
-      "If the system refuses it, start NetDash with administrator rights.";
+      "Changes re-apply the connection, so expect a brief pause. " +
+      "Administrator rights may be required.";
     ui.dnsHint.className = "hint-line";
   }
 
@@ -598,7 +647,7 @@
     const addressCell = document.createElement("td");
     addressCell.innerHTML = `
       <div class="addr-ip">${escapeHtml(device.ip || "—")}</div>
-      <div class="addr-mac">${escapeHtml(device.mac || "no MAC")}</div>`;
+      <div class="addr-mac">${macMarkup(device.mac, "no MAC")}</div>`;
 
     const typeCell = document.createElement("td");
     if (device.is_gateway || !device.mac) {
@@ -694,7 +743,7 @@
           body: { mac: device.mac, label: value },
         });
         device.label = result.label || "";
-        toast(device.label ? `Label saved for ${device.mac}.` : "Label cleared.", "ok");
+        toast(device.label ? `Label saved for ${macText(device.mac)}.` : "Label cleared.", "ok");
       } catch (error) {
         toast(error.message || "Could not save the label.", "error", error.hint || "");
       }
@@ -770,8 +819,11 @@
   }
 
   function nodeColor(device) {
-    const types = (window.NetDash3D && window.NetDash3D.TYPES) || {};
     const key = device.is_gateway ? "router" : device.is_self ? "self" : (device.type || "other");
+    if (window.NetDash3D && typeof window.NetDash3D.typeColor === "function") {
+      return window.NetDash3D.typeColor(key, state.theme);
+    }
+    const types = (window.NetDash3D && window.NetDash3D.TYPES) || {};
     return (types[key] || types.other || { color: "#2dd4bf" }).color;
   }
 
@@ -832,6 +884,7 @@
       canWifi: !!router.connected && !!caps.wifi,
       hideOffline: !!state.hideOffline,
       focusTypes: state.focusTypes.slice(),
+      theme: state.theme,
     });
     updateSceneHud();
   }
@@ -944,6 +997,68 @@
     syncScene();
   }
 
+  const themeQuery = typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : null;
+
+  function prefersReducedMotion() {
+    return typeof window.matchMedia === "function"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function resolveTheme(mode) {
+    if (mode === "light" || mode === "dark") return mode;
+    return themeQuery && !themeQuery.matches ? "light" : "dark";
+  }
+
+  function updateAppearance() {
+    for (const button of ui.appearanceButtons) {
+      const active = button.dataset.themeMode === state.themeMode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+    document.documentElement.dataset.themeMode = state.themeMode;
+    document.documentElement.style.colorScheme = state.theme;
+  }
+
+  function applyTheme(mode, options = {}) {
+    const { persist = true, animate = true } = options;
+    state.themeMode = ["auto", "light", "dark"].includes(mode) ? mode : "auto";
+    const next = resolveTheme(state.themeMode);
+    const changed = document.documentElement.dataset.theme !== next;
+    const commit = () => {
+      state.theme = next;
+      document.documentElement.dataset.theme = next;
+      updateAppearance();
+      syncScene();
+      refreshNodePanel();
+    };
+    if (animate && changed && !prefersReducedMotion() && state.view !== "3d"
+      && typeof document.startViewTransition === "function") {
+      document.startViewTransition(commit);
+    } else {
+      commit();
+    }
+    if (persist) {
+      try {
+        localStorage.setItem("netdash-theme", state.themeMode);
+      } catch (error) {
+        /* private mode: remembering the appearance is optional */
+      }
+    }
+  }
+
+  if (themeQuery) {
+    const onSystemTheme = () => {
+      if (state.themeMode === "auto") applyTheme("auto", { persist: false });
+    };
+    if (typeof themeQuery.addEventListener === "function") {
+      themeQuery.addEventListener("change", onSystemTheme);
+    } else if (typeof themeQuery.addListener === "function") {
+      themeQuery.addListener(onSystemTheme);
+    }
+  }
+
   function setView(view, persist = true) {
     const target = view === "3d" ? "3d" : "dashboard";
     state.view = target;
@@ -955,6 +1070,14 @@
       tab.classList.toggle("active", active);
       tab.setAttribute("aria-selected", active ? "true" : "false");
     }
+
+    const visible = target === "3d" ? ui.view3d : ui.viewDashboard;
+    visible.classList.remove("view-enter");
+    requestAnimationFrame(() => {
+      visible.classList.add("view-enter");
+      setTimeout(() => visible.classList.remove("view-enter"), 300);
+    });
+
     if (target === "3d") {
       ensureScene();
       syncScene();
@@ -1126,7 +1249,7 @@
     } else {
       if (device.label && device.name) facts.push(fact("Hostname", device.name));
       facts.push(fact("Address", device.ip || "—", true));
-      facts.push(fact("MAC address", device.mac || "Unknown", true));
+      facts.push(`<dt>MAC address</dt><dd class="mono">${macMarkup(device.mac, "Unknown")}</dd>`);
       facts.push(fact("Vendor", device.vendor || "Unresolved"));
       if (device.mac) {
         facts.push(`<dt>Type</dt><dd class="type-fact">${typeSelectMarkup(device)}</dd>`);
@@ -1559,17 +1682,36 @@
   }
 
   // ----------------------------------------------------------------- settings
+  let drawerTimer = null;
+
   function openDrawer() {
+    clearTimeout(drawerTimer);
     ui.drawer.hidden = false;
     ui.drawerBackdrop.hidden = false;
     ui.drawer.setAttribute("aria-hidden", "false");
+    // Flush the closed transform first so the open transition always runs.
+    void ui.drawer.offsetWidth;
+    ui.drawer.classList.add("open");
+    ui.drawerBackdrop.classList.add("open");
     loadSettings();
   }
 
   function closeDrawer() {
-    ui.drawer.hidden = true;
-    ui.drawerBackdrop.hidden = true;
+    ui.drawer.classList.remove("open");
+    ui.drawerBackdrop.classList.remove("open");
     ui.drawer.setAttribute("aria-hidden", "true");
+    const finish = () => {
+      if (!ui.drawer.classList.contains("open")) {
+        ui.drawer.hidden = true;
+        ui.drawerBackdrop.hidden = true;
+      }
+    };
+    clearTimeout(drawerTimer);
+    if (prefersReducedMotion()) {
+      finish();
+      return;
+    }
+    drawerTimer = setTimeout(finish, 300);
   }
 
   async function loadSettings() {
@@ -1708,11 +1850,19 @@
   async function boot() {
     try {
       state.hideOffline = localStorage.getItem("netdash-hide-offline") === "1";
+      state.showMac = localStorage.getItem("netdash-show-mac") !== "0";
+      const storedTheme = localStorage.getItem("netdash-theme") || "auto";
+      state.themeMode = ["auto", "light", "dark"].includes(storedTheme) ? storedTheme : "auto";
     } catch (error) {
       /* storage is optional */
     }
+    state.theme = resolveTheme(state.themeMode);
+    document.documentElement.dataset.theme = state.theme;
+    document.documentElement.style.colorScheme = state.theme;
+    updateAppearance();
     updateHideOfflineButton();
     updateLegendState();
+    if (ui.showMac) ui.showMac.checked = state.showMac;
 
     try {
       await refreshState();
@@ -1758,6 +1908,7 @@
   ui.routerDiag.addEventListener("click", downloadDiagnostics);
   ui.routerTest.addEventListener("click", testRouterControl);
   $("#save-settings").addEventListener("click", saveSettings);
+  ui.showMac.addEventListener("change", () => applyShowMac(ui.showMac.checked));
   ui.search.addEventListener("input", () => {
     state.filter = ui.search.value;
     renderDevices(state.lastPayload || { devices: state.devices, scanned_at: 0, subnet: "" });
@@ -1780,6 +1931,9 @@
   for (const tab of ui.viewTabs) {
     tab.addEventListener("click", () => setView(tab.dataset.view));
   }
+  for (const button of ui.appearanceButtons) {
+    button.addEventListener("click", () => applyTheme(button.dataset.themeMode));
+  }
   $("#scene-scan").addEventListener("click", doScan);
   $("#scene-empty-scan").addEventListener("click", doScan);
   ui.sceneRotate.addEventListener("click", () => {
@@ -1800,6 +1954,28 @@
   ui.sceneFullscreen.addEventListener("click", toggleSceneFullscreen);
   document.addEventListener("fullscreenchange", onFullscreenChange);
   document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+
+  // Masked MAC addresses reveal while hovered (CSS) and toggle on tap/click
+  // or Enter/Space, so a screenshot never shows an address that is hidden.
+  document.addEventListener("click", (event) => {
+    const node = event.target instanceof Element
+      ? event.target.closest(".mac-value.masked")
+      : null;
+    if (!node) return;
+    event.preventDefault();
+    event.stopPropagation();
+    toggleMacReveal(node);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") return;
+    const node = event.target instanceof Element
+      ? event.target.closest(".mac-value.masked")
+      : null;
+    if (!node) return;
+    event.preventDefault();
+    toggleMacReveal(node);
+  });
 
   document.addEventListener("keydown", (event) => {
     if ((event.key === "f" || event.key === "F")
