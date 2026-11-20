@@ -11,7 +11,7 @@ cp app.py __main__.py "$STAGE/"
 cp netdash/*.py "$STAGE/netdash/"
 mkdir -p "$STAGE/netdash/router" "$STAGE/netdash/static" "$STAGE/netdash/data"
 cp netdash/router/*.py "$STAGE/netdash/router/"
-cp netdash/static/index.html netdash/static/style.css netdash/static/app.js netdash/static/favicon.svg "$STAGE/netdash/static/"
+cp netdash/static/index.html netdash/static/style.css netdash/static/app.js netdash/static/scene3d.js netdash/static/favicon.svg "$STAGE/netdash/static/"
 cp netdash/data/oui.txt "$STAGE/netdash/data/"
 
 python3 -m zipapp "$STAGE" -p "/usr/bin/env python3" -o netdash.pyz -c

@@ -244,6 +244,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.app.set_device_access(body)
         if path == "/api/device/label":
             return self.app.set_device_label(body)
+        if path == "/api/device/type":
+            return self.app.set_device_type(body)
         if path == "/api/speedtest/start":
             return self.app.start_speedtest()
         if path == "/api/settings":

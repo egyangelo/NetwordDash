@@ -72,31 +72,79 @@ def _is_local_admin(mac: str) -> bool:
         return False
 
 
+_NAME_TYPES = [
+    ("xbox", ("xbox",)),
+    ("playstation", ("playstation", "ps4", "ps5", "ps-vita", "dualsense", "dualshock")),
+    ("camera", ("camera", "cctv", "ipcam", "webcam", "doorbell", "reolink",
+                "hikvision", "ezviz")),
+    ("light", ("light", "lamp", "bulb", "hue", "lifx", "nanoleaf", "govee",
+               "ledstrip", "led-strip")),
+    ("iot", ("espressif", "tuya", "shelly", "sonoff", "tasmota", "zigbee", "z-wave")),
+    ("speaker", ("homepod", "sonos", "speaker", "echo-", "echo dot", "nest-audio",
+                 "nest-mini", "soundbar")),
+    ("printer", ("printer", "officejet", "laserjet", "deskjet", "ecotank")),
+    ("tablet", ("ipad", "tablet", "galaxy-tab", "sm-t", "matepad")),
+    ("laptop", ("laptop", "notebook", "macbook", "thinkpad", "ideapad", "chromebook",
+                "surface", "vaio", "swift")),
+    ("tv", ("apple-tv", "appletv", "androidtv", "android-tv", "chromecast", "fire-tv",
+            "firetv", "bravia", "smart-tv", "smarttv", "smart tv", " tv", "tv ",
+            "roku", "shield-tv")),
+    ("console", ("nintendo", "switch", "steamdeck", "steam-deck", "game-console",
+                 "gaming-console", "console")),
+    ("computer", ("desktop", "imac", "mac-mini", "macmini", "workstation", "nuc-")),
+    ("phone", ("iphone", "pixel", "galaxy-s", "sm-g", "oneplus", "redmi", "poco",
+               "moto-", "android", "phone", "fold")),
+]
+
 _VENDOR_TYPES = [
     ("router", ("zte", "tp-link", "netgear", "d-link", "dlink", "asustek", "asus",
                 "huawei", "technicolor", "sagemcom", "nokia", "arris", "ubiquiti",
                 "mikrotik", "sagem", "calix", "fiberhome")),
-    ("iot", ("espressif", "tuya", "shelly", "sonoff", "itead", "philips",
-             "signify", "lifx", "nest labs", "amazon technologies", "ring",
-             "wyze", "raspberry pi", "arduino", "particle")),
+    ("camera", ("hikvision", "dahua", "axis communications", "reolink", "amcrest",
+                "ezviz", "uniview", "foscam", "annke", "wyze", "ring llc")),
+    ("light", ("signify", "philips lighting", "lifx", "nanoleaf", "govee",
+               "yeelight", "wiz connected")),
+    ("speaker", ("sonos", "bose", "harman", "jbl", "denon", "yamaha",
+                 "bang & olufsen", "amazon technologies")),
     ("printer", ("canon", "epson", "brother", "lexmark", "xerox", "kyocera")),
-    ("console", ("sony interactive", "nintendo", "valve", "microsoft")),
+    ("playstation", ("sony interactive",)),
+    ("iot", ("espressif", "tuya", "shelly", "sonoff", "itead", "arduino", "particle")),
     ("tv", ("roku", "vizio", "hisense", "tcl", "lg electronics", "samsung electronics",
-            "google", "apple")),
+            "sharp")),
     ("phone", ("xiaomi", "oneplus", "oppo", "vivo", "motorola", "realme",
-               "transsion", "honor", "meizu")),
+               "transsion", "honor", "meizu", "google")),
     ("computer", ("intel", "dell", "hewlett", "lenovo", "acer", "micro-star",
-                  "gigabyte", "asrock", "raspberry", "framework", "supermicro")),
+                  "gigabyte", "asrock", "raspberry", "framework", "supermicro",
+                  "microsoft", "apple")),
 ]
 
 
-def device_type(vendor: str, mac: str) -> str:
-    if _is_local_admin(mac):
-        return "phone"
-    low = vendor.lower()
-    for kind, keys in _VENDOR_TYPES:
+def _type_from_name(name: str) -> str:
+    low = (name or "").strip().lower().replace("_", "-")
+    if not low:
+        return ""
+    for kind, keys in _NAME_TYPES:
         if any(key in low for key in keys):
             return kind
+    return ""
+
+
+def type_from_name(name: str) -> str:
+    """Public hint used to honour a user's device label."""
+    return _type_from_name(name)
+
+
+def device_type(vendor: str, mac: str, name: str = "") -> str:
+    named = _type_from_name(name)
+    if named:
+        return named
+    low = vendor.lower()
+    if low:
+        for kind, keys in _VENDOR_TYPES:
+            if any(key in low for key in keys):
+                return kind
+    if _is_local_admin(mac):
+        return "phone"
     return "other"
 
 
@@ -250,13 +298,18 @@ class DeviceScanner:
             entry = arp[host]
             mac = entry.get("mac", "")
             responded = host in alive
+            vendor = _vendor(mac) if mac else ""
+            name = names.get(host, "")
             devices.append(
                 {
                     "ip": host,
                     "mac": mac,
-                    "name": names.get(host, ""),
-                    "vendor": _vendor(mac) if mac else "",
-                    "type": device_type(_vendor(mac), mac) if mac else "other",
+                    "name": name,
+                    "vendor": vendor,
+                    "type": (
+                        "router" if host == gateway
+                        else (device_type(vendor, mac, name) if mac else "other")
+                    ),
                     "online": responded or entry.get("state") in ("reachable", "delay", "probe"),
                     "responded": responded,
                     "state": entry.get("state", "unknown"),
@@ -274,13 +327,18 @@ class DeviceScanner:
             if host and host not in seen:
                 entry = before.get(host) or arp.get(host) or {}
                 mac = entry.get("mac", "")
+                vendor = _vendor(mac) if mac else ""
+                name = names.get(host, "")
                 devices.append(
                     {
                         "ip": host,
                         "mac": mac,
-                        "name": names.get(host, ""),
-                        "vendor": _vendor(mac) if mac else "",
-                        "type": device_type(_vendor(mac), mac) if mac else "other",
+                        "name": name,
+                        "vendor": vendor,
+                        "type": (
+                            "router" if flag == "is_gateway"
+                            else (device_type(vendor, mac, name) if mac else "other")
+                        ),
                         "online": flag == "is_self",
                         "responded": flag == "is_self",
                         "state": entry.get("state", "unknown"),

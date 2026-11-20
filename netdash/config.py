@@ -23,6 +23,8 @@ DEFAULTS: dict[str, Any] = {
     },
     # Custom device names keyed by normalized MAC address.
     "labels": {},
+    # Manual device-type overrides keyed by normalized MAC address.
+    "types": {},
 }
 
 

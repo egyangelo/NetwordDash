@@ -38,6 +38,8 @@ Requires Python 3.10 or newer. Everything else is part of the standard library.
 | Connection | SSID, security, signal strength, link rate, channel, interface, MAC, local IP |
 | Traffic | Total received/sent bytes for the active interface |
 | Devices | Ping sweep + ARP/neighbour table, vendor lookup from the bundled IEEE OUI registry, best-effort hostnames |
+| 3D map | Navigable perspective view: router and devices as shapes, animated links, click-to-inspect details, per-link internet switch |
+| Device types | Auto-detected from hostname and vendor, with a manual per-device type override |
 | Labels | Custom device names keyed to the MAC address, stored locally |
 | Sorting | Sort the table by Device, Address, Type, or Status; click again to reverse |
 | DNS | Switch between Automatic (DHCP), Google, FamilyShield, AdGuard, Cloudflare Malware and Cloudflare Family |
@@ -58,7 +60,58 @@ empty value to clear it.
 Labels are keyed to the normalized MAC address and stored in
 `~/.config/netdash/config.json`, so they survive IP changes and restarts. They
 are local to NetDash and are never written to the router. The search box matches
-labels too.
+labels too. When a label names a device clearly (`Smart Light`, `Samsung TV`,
+`Xbox`, `DoorBell`), the 3D map uses it to pick the matching figure.
+
+## 3D network map
+
+The **3D Map** tab turns the device list into a navigable scene. The router sits
+at the centre as a hub, and every other device orbits it as a shape chosen for
+its type: desktops, laptops, tablets, phones, TVs, IP cameras and doorbells,
+smart lights, speakers, printers, and gamepads for Xbox, PlayStation and other
+consoles. Anything unrecognised becomes a cube. The scene spans the full browser
+width and height below the header in the normal 3D tab (the footer is hidden
+there); the expand button makes it truly fullscreen.
+
+Devices are classified from their hostname and vendor — `LAPTOP-…`, `iPad`,
+`Galaxy-Tab`, `iPhone`, `Samsung TV`, `Smart Light`, `DoorBell`, `Xbox-…`,
+`PlayStation`, `HomePod`, and similar names map to their own figures. Detection
+is a guess: each device row and 3D detail panel has a **Type** selector. Pick a
+category to override it, or **Auto** to restore detection. Overrides are stored
+locally by MAC address and never written to the router.
+
+Devices are spread over concentric rings, with each outer ring sitting in the
+angular gaps of the ring inside it, so the links stay separated instead of
+overlapping. In dense views, labels that would collide are skipped; hover or
+click a figure to identify it.
+
+- **Orbit:** drag. **Pan:** Shift-drag or right-drag. **Zoom:** scroll or pinch.
+  Arrow keys orbit, `+` / `-` zoom, and `0` or `R` resets the camera.
+- **Full screen:** the expand button in the top-right corner (or `F` while the
+  map has focus) fills the display; press `Esc` or the same button to return.
+- **Links:** each device has a link to the router. Click the link itself to
+  disconnect or reconnect its internet access through the router's MAC filter
+  (the same action as the table's **Internet** switch). Connected links show no
+  badge; a disconnected link shows a small plug glyph you can click to
+  reconnect. Hovering a link shows its action.
+- **Offline filter:** the eye button hides offline devices from the map; the
+  choice is remembered on this computer.
+- **Focus:** click one or more categories in the bottom legend to dim every
+  other device type and highlight them. Click an active category again to
+  remove it, or **Clear** to show everything. Categories with no devices are
+  hidden from the legend.
+- **Details:** click any figure to open a panel with its address, MAC, vendor,
+  type, connection, how it was discovered, last-seen time, and access switches.
+  **Center in view** flies the camera to the device; **Rename** edits the local
+  label.
+- **Live:** device positions, labels, and link state follow the normal scan
+  refresh. The view fits itself to the screen until you zoom or pan, and
+  **Reset view** restores the fit.
+
+The renderer is small vanilla JavaScript on a 2D canvas with a perspective
+camera; it uses no WebGL and no third-party library, so the app stays offline
+and single-file. `prefers-reduced-motion` disables the drifting shapes and
+moving link particles.
 
 ## DNS profiles
 

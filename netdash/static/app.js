@@ -62,6 +62,26 @@
     dialogBody: $("#dialog-body"),
     dialogHint: $("#dialog-hint"),
     dialogOk: $("#dialog-ok"),
+    viewDashboard: $("#view-dashboard"),
+    view3d: $("#view-3d"),
+    viewTabs: document.querySelectorAll(".view-tab"),
+    sceneCanvas: $("#scene3d"),
+    sceneShell: $("#scene-shell"),
+    sceneTip: $("#scene-tip"),
+    sceneEmpty: $("#scene-empty"),
+    sceneEmptyText: $("#scene-empty-text"),
+    sceneOnline: $("#scene-online"),
+    sceneOffline: $("#scene-offline"),
+    sceneBlocked: $("#scene-blocked"),
+    sceneRouterStat: $("#scene-router-stat"),
+    sceneRouterText: $("#scene-router-text"),
+    sceneRotate: $("#scene-rotate"),
+    sceneHideOffline: $("#scene-hide-offline"),
+    sceneFullscreen: $("#scene-fullscreen"),
+    sceneLegend: $("#scene-legend"),
+    legendItems: document.querySelectorAll(".legend-item"),
+    legendClear: $("#legend-clear"),
+    nodePanel: $("#node-panel"),
   };
 
   const state = {
@@ -76,6 +96,14 @@
     reloading: false,
     speedTimer: null,
     sort: { key: "address", dir: 1 },
+    view: "dashboard",
+    scene: null,
+    selectedKey: "",
+    panelKey: "",
+    panelEditing: false,
+    hideOffline: false,
+    focusTypes: [],
+    devicesLoaded: false,
   };
 
   // ---------------------------------------------------------------- helpers
@@ -191,13 +219,57 @@
   }
 
   // ------------------------------------------------------------------ icons
+  const TYPE_LABELS = {
+    phone: "Phone", tablet: "Tablet", computer: "Desktop PC", laptop: "Laptop",
+    tv: "TV", camera: "Camera", light: "Smart light", speaker: "Speaker",
+    xbox: "Xbox", playstation: "PlayStation", console: "Console",
+    printer: "Printer", router: "Router", iot: "IoT", other: "Other",
+  };
+
+  const TYPE_ORDER = [
+    "computer", "laptop", "tablet", "phone", "tv", "camera", "light",
+    "speaker", "xbox", "playstation", "console", "printer", "iot",
+    "router", "other",
+  ];
+
+  function typeSelectMarkup(device) {
+    const autoType = device.auto_type || device.type || "other";
+    const current = device.type_override || "auto";
+    const title = device.type_override
+      ? "Manual override. Choose Auto to restore automatic detection."
+      : "Detected automatically. Pick a category to override it.";
+    const options = [
+      `<option value="auto"${current === "auto" ? " selected" : ""}>Auto · ${escapeHtml(TYPE_LABELS[autoType] || "Other")}</option>`,
+      ...TYPE_ORDER.map((type) => (
+        `<option value="${type}"${current === type ? " selected" : ""}>${escapeHtml(TYPE_LABELS[type] || type)}</option>`
+      )),
+    ];
+    const manual = device.type_override
+      ? '<span class="tag manual">Manual</span>'
+      : "";
+    return `<span class="type-edit-wrap">
+      <span class="type-select-box">
+        <select class="type-select" title="${escapeHtml(title)}" aria-label="Device type">${options.join("")}</select>
+        <svg class="type-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </span>
+      ${manual}
+    </span>`;
+  }
+
   const ICONS = {
-    computer: '<rect x="2.5" y="4" width="19" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    computer: '<rect x="2.5" y="5" width="12" height="9" rx="1.5"/><path d="M8.5 20h4M10.5 14v6"/><rect x="17" y="8" width="4.5" height="12" rx="1"/>',
+    laptop: '<rect x="4" y="4" width="16" height="10" rx="1.5"/><path d="M2 19h20l-2-3H4z"/>',
+    tablet: '<rect x="4.5" y="2.5" width="15" height="19" rx="2.5"/><path d="M10.5 18.5h3"/>',
     phone: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
     tv: '<rect x="2.5" y="5" width="19" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
+    camera: '<path d="M4 13a8 8 0 0 1 16 0z"/><circle cx="12" cy="15.5" r="2"/><path d="M5 19h14"/>',
+    light: '<path d="M9.5 17h5M10.5 20h3M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.3 1 2.1h5c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
+    speaker: '<rect x="6" y="3" width="12" height="18" rx="5"/><circle cx="12" cy="8.5" r="1.6"/><circle cx="12" cy="15.5" r="1.2"/>',
+    xbox: '<circle cx="12" cy="12" r="8"/><path d="m8.8 8.8 6.4 6.4M15.2 8.8l-6.4 6.4"/>',
+    playstation: '<path d="M6 8h12a4 4 0 0 1 4 4v1a3 3 0 0 1-5.4 1.8L15 13H9l-1.6 1.8A3 3 0 0 1 2 13v-1a4 4 0 0 1 4-4z"/><path d="M6 12h2M7 11v2M16 11.5h.01M18 13.5h.01"/>',
+    console: '<path d="M6 8h12a4 4 0 0 1 4 4v1a3 3 0 0 1-5.4 1.8L15 13H9l-1.6 1.8A3 3 0 0 1 2 13v-1a4 4 0 0 1 4-4z"/><path d="M6 12h2M7 11v2M16 11.5h.01M18 13.5h.01"/>',
     iot: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/>',
     printer: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 17h12v4H6z"/>',
-    console: '<path d="M6 8h4l2 3 2-3h4l2 5-2 5H8L6 13z"/><path d="M9 13h.01M15 13h.01"/>',
     router: '<rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M10 16.5h.01M12 13V9M8 9a6 6 0 0 1 8 0"/>',
     other: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 1.5"/>',
   };
@@ -211,7 +283,8 @@
   function iconClass(device) {
     if (device.is_self) return "self";
     if (device.is_gateway) return "gateway";
-    return ["phone", "computer", "tv", "iot", "printer", "console", "router"].includes(device.type)
+    return ["phone", "tablet", "computer", "laptop", "tv", "camera", "light", "speaker",
+      "xbox", "playstation", "console", "printer", "router", "iot"].includes(device.type)
       ? device.type
       : "";
   }
@@ -292,6 +365,7 @@
 
     renderDns(dns);
     renderRouter(router);
+    syncScene();
   }
 
   function renderDns(dns) {
@@ -446,6 +520,7 @@
   function renderDevices(payload) {
     if (payload.scanned_at !== undefined) state.lastPayload = payload;
     state.devices = payload.devices || [];
+    state.devicesLoaded = true;
     const router = (state.snapshot && state.snapshot.router) || {};
     const caps = router.capabilities || {};
     const canControl = !!router.connected && !!caps.block;
@@ -475,6 +550,9 @@
     ui.emptyText.textContent = total === 0
       ? (payload.scanning ? "Scanning the network…" : "No devices found. Try scanning again.")
       : "No devices match your filter.";
+
+    syncScene();
+    refreshNodePanel();
   }
 
   function deviceRow(device, canControl, canWifi) {
@@ -523,11 +601,15 @@
       <div class="addr-mac">${escapeHtml(device.mac || "no MAC")}</div>`;
 
     const typeCell = document.createElement("td");
-    const TYPE_LABELS = {
-      phone: "Phone", computer: "Computer", tv: "TV", iot: "IoT",
-      printer: "Printer", console: "Console", router: "Router", other: "Other",
-    };
-    typeCell.innerHTML = `<span class="type-chip">${escapeHtml(TYPE_LABELS[device.type] || "Other")}</span>`;
+    if (device.is_gateway || !device.mac) {
+      typeCell.innerHTML = `<span class="type-chip">${escapeHtml(TYPE_LABELS[device.type] || "Other")}</span>`;
+    } else {
+      typeCell.innerHTML = typeSelectMarkup(device);
+      const typeSelect = typeCell.querySelector(".type-select");
+      if (typeSelect) {
+        typeSelect.addEventListener("change", () => setDeviceType(device, typeSelect.value, typeSelect));
+      }
+    }
 
     const statusCell = document.createElement("td");
     let statusText = "Offline";
@@ -682,6 +764,574 @@
     }
   }
 
+  // ------------------------------------------------------------------- 3d map
+  function keyForDevice(device) {
+    return device.mac || (device.ip ? `ip:${device.ip}` : "");
+  }
+
+  function nodeColor(device) {
+    const types = (window.NetDash3D && window.NetDash3D.TYPES) || {};
+    const key = device.is_gateway ? "router" : device.is_self ? "self" : (device.type || "other");
+    return (types[key] || types.other || { color: "#2dd4bf" }).color;
+  }
+
+  function syntheticRouter() {
+    const snapshot = state.snapshot || {};
+    const router = snapshot.router || {};
+    const net = snapshot.network || {};
+    return {
+      ip: router.host || net.gateway || "",
+      mac: "",
+      name: router.model || "Router",
+      vendor: "",
+      type: "router",
+      online: !!router.connected,
+      state: "router",
+      is_gateway: true,
+      is_self: false,
+      blocked: false,
+      wifi_blocked: false,
+      connection: "lan",
+      source: "router",
+    };
+  }
+
+  function panelDevice(key) {
+    if (!key) return null;
+    const found = state.devices.find((device) => keyForDevice(device) === key);
+    if (found) return found;
+    if (key === "__router__") {
+      return state.devices.find((device) => device.is_gateway) || syntheticRouter();
+    }
+    return null;
+  }
+
+  function ensureScene() {
+    if (state.scene) return state.scene;
+    if (!window.NetDash3D || !ui.sceneCanvas) return null;
+    state.scene = window.NetDash3D.create({
+      canvas: ui.sceneCanvas,
+      onSelect: (device, key) => select3dNode(device, key),
+      onLinkAction: (device, key) => toggle3dLink(device, key),
+      onHover: showSceneTip,
+    });
+    return state.scene;
+  }
+
+  function syncScene() {
+    updateLegendState();
+    if (!state.scene) return;
+    const snapshot = state.snapshot || {};
+    const router = snapshot.router || {};
+    const caps = router.capabilities || {};
+    state.scene.sync({
+      devices: state.devices,
+      router,
+      network: snapshot.network || {},
+      canControl: !!router.connected && !!caps.block,
+      canWifi: !!router.connected && !!caps.wifi,
+      hideOffline: !!state.hideOffline,
+      focusTypes: state.focusTypes.slice(),
+    });
+    updateSceneHud();
+  }
+
+  function updateSceneHud() {
+    const total = state.devices.length;
+    const online = state.devices.filter((device) => device.online).length;
+    const blocked = state.devices.filter((device) => device.blocked).length;
+    ui.sceneOnline.textContent = String(online);
+    ui.sceneOffline.textContent = String(Math.max(0, total - online));
+    ui.sceneBlocked.textContent = String(blocked);
+    const hiddenOffline = Math.max(0, total - online);
+    ui.sceneOffline.parentElement.title = state.hideOffline && hiddenOffline
+      ? `${hiddenOffline} offline device${hiddenOffline === 1 ? "" : "s"} hidden from the map`
+      : "";
+
+    const router = (state.snapshot && state.snapshot.router) || {};
+    ui.sceneRouterStat.classList.toggle("live", !!router.connected);
+    ui.sceneRouterText.textContent = router.connected
+      ? `${router.model || "Router"} connected`
+      : "Router not connected";
+
+    const satellites = state.devices.filter((device) => !device.is_gateway);
+    const visible = satellites.filter((device) => !state.hideOffline || device.online !== false).length;
+    const empty = satellites.length === 0 || visible === 0;
+    ui.sceneEmpty.hidden = !empty;
+    if (empty) {
+      const payload = state.lastPayload || {};
+      if (satellites.length === 0) {
+        ui.sceneEmptyText.textContent = payload.scanning
+          ? "Scanning the local network…"
+          : "No devices yet. Run a scan to build the map.";
+      } else {
+        ui.sceneEmptyText.textContent =
+          "All devices are offline. Turn off the eye filter to show them.";
+      }
+    }
+  }
+
+  function updateHideOfflineButton() {
+    const active = !!state.hideOffline;
+    ui.sceneHideOffline.setAttribute("aria-pressed", active ? "true" : "false");
+    ui.sceneHideOffline.title = active ? "Show offline devices" : "Hide offline devices";
+    ui.sceneHideOffline.setAttribute(
+      "aria-label", active ? "Show offline devices" : "Hide offline devices",
+    );
+  }
+
+  function toggleHideOffline() {
+    state.hideOffline = !state.hideOffline;
+    updateHideOfflineButton();
+    try {
+      localStorage.setItem("netdash-hide-offline", state.hideOffline ? "1" : "0");
+    } catch (error) {
+      /* private mode: remembering the filter is optional */
+    }
+    syncScene();
+    if (state.hideOffline && state.panelKey) {
+      const device = panelDevice(state.panelKey);
+      if (device && !device.is_gateway && device.online === false) closeNodePanel();
+    }
+  }
+
+  function updateLegendState() {
+    let present;
+    if (!state.devicesLoaded) {
+      present = new Set([...ui.legendItems].map((item) => item.dataset.type));
+    } else {
+      const visible = state.devices.filter(
+        (device) => device.is_gateway || !state.hideOffline || device.online !== false,
+      );
+      present = new Set(
+        visible.map((device) => (device.is_gateway ? "router" : (device.type || "other"))),
+      );
+      present.add("router");
+    }
+
+    state.focusTypes = state.focusTypes.filter((type) => present.has(type));
+    const activeCount = state.focusTypes.length;
+    ui.sceneLegend.classList.toggle("has-focus", activeCount > 0);
+    ui.legendClear.hidden = activeCount === 0;
+
+    for (const item of ui.legendItems) {
+      const type = item.dataset.type;
+      const available = present.has(type);
+      const active = available && state.focusTypes.includes(type);
+      item.hidden = !available;
+      item.classList.toggle("active", active);
+      item.setAttribute("aria-pressed", active ? "true" : "false");
+      const label = item.textContent.trim();
+      item.title = active
+        ? `Remove ${label} from focus`
+        : `Add ${label} to focus`;
+    }
+  }
+
+  function setFocusType(type) {
+    const index = state.focusTypes.indexOf(type);
+    if (index >= 0) {
+      state.focusTypes.splice(index, 1);
+    } else {
+      state.focusTypes.push(type);
+    }
+    syncScene();
+  }
+
+  function clearFocus() {
+    if (!state.focusTypes.length) return;
+    state.focusTypes = [];
+    syncScene();
+  }
+
+  function setView(view, persist = true) {
+    const target = view === "3d" ? "3d" : "dashboard";
+    state.view = target;
+    document.body.classList.toggle("scene-mode", target === "3d");
+    ui.viewDashboard.hidden = target !== "dashboard";
+    ui.view3d.hidden = target !== "3d";
+    for (const tab of ui.viewTabs) {
+      const active = tab.dataset.view === target;
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-selected", active ? "true" : "false");
+    }
+    if (target === "3d") {
+      ensureScene();
+      syncScene();
+      if (state.scene) {
+        state.scene.setActive(true);
+        requestAnimationFrame(() => {
+          if (state.scene) state.scene.resize();
+        });
+      }
+    } else {
+      showSceneTip(null);
+      if (state.scene) state.scene.setActive(false);
+      if (isSceneFullscreen()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) {
+          const result = exit.call(document);
+          if (result && typeof result.catch === "function") result.catch(() => {});
+        }
+      }
+    }
+    if (persist) {
+      try {
+        localStorage.setItem("netdash-view", target);
+      } catch (error) {
+        /* private mode: remembering the tab is optional */
+      }
+    }
+  }
+
+  function isSceneFullscreen() {
+    return (document.fullscreenElement || document.webkitFullscreenElement) === ui.sceneShell;
+  }
+
+  function syncFullscreenButton() {
+    const active = isSceneFullscreen();
+    ui.sceneFullscreen.setAttribute("aria-pressed", active ? "true" : "false");
+    ui.sceneFullscreen.title = active ? "Exit full screen" : "Full screen";
+    ui.sceneFullscreen.setAttribute(
+      "aria-label", active ? "Exit full screen" : "Enter full screen",
+    );
+  }
+
+  async function toggleSceneFullscreen() {
+    try {
+      if (isSceneFullscreen()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) await exit.call(document);
+        return;
+      }
+      const request = ui.sceneShell.requestFullscreen || ui.sceneShell.webkitRequestFullscreen;
+      if (!request) throw new Error("Full screen is not available in this browser.");
+      await request.call(ui.sceneShell);
+    } catch (error) {
+      toast(error.message || "Could not enter full screen.", "error",
+        "Your browser may block full screen for this page.");
+    }
+  }
+
+  function onFullscreenChange() {
+    syncFullscreenButton();
+    requestAnimationFrame(() => {
+      if (!state.scene) return;
+      state.scene.resize();
+      state.scene.fit();
+    });
+  }
+
+  function showSceneTip(info) {
+    if (!info) {
+      ui.sceneTip.hidden = true;
+      return;
+    }
+    ui.sceneTip.hidden = false;
+    ui.sceneTip.className = `scene-tip ${info.tone || ""}`;
+    ui.sceneTip.innerHTML =
+      `${escapeHtml(info.title)}<span class="tip-sub">${escapeHtml(info.subtitle || "")}</span>`;
+    const box = ui.sceneShell.getBoundingClientRect();
+    const tipWidth = 236;
+    const tipHeight = 46;
+    let x = info.x + 16;
+    let y = info.y + 16;
+    if (x + tipWidth > box.width - 8) x = info.x - tipWidth - 10;
+    if (y + tipHeight > box.height - 8) y = info.y - tipHeight - 10;
+    ui.sceneTip.style.left = `${Math.max(8, x)}px`;
+    ui.sceneTip.style.top = `${Math.max(8, y)}px`;
+  }
+
+  function select3dNode(device, key) {
+    const panelKey = key || keyForDevice(device);
+    state.selectedKey = panelKey;
+    state.panelKey = panelKey;
+    if (state.scene) state.scene.setSelected(panelKey);
+    ui.nodePanel.hidden = false;
+    renderNodePanel(device, panelKey);
+  }
+
+  function closeNodePanel() {
+    state.panelKey = "";
+    state.selectedKey = "";
+    state.panelEditing = false;
+    ui.nodePanel.hidden = true;
+    ui.nodePanel.innerHTML = "";
+    if (state.scene) state.scene.setSelected("");
+  }
+
+  function refreshNodePanel() {
+    if (!state.panelKey || ui.nodePanel.hidden || state.panelEditing) return;
+    const device = panelDevice(state.panelKey);
+    if (!device) {
+      closeNodePanel();
+      return;
+    }
+    if (state.hideOffline && !device.is_gateway && device.online === false) {
+      closeNodePanel();
+      return;
+    }
+    renderNodePanel(device, state.panelKey);
+  }
+
+  function renderNodePanel(device, key) {
+    if (!device) {
+      closeNodePanel();
+      return;
+    }
+    const isRouter = !!device.is_gateway;
+    const snapshot = state.snapshot || {};
+    const router = snapshot.router || {};
+    const caps = router.capabilities || {};
+    const net = snapshot.network || {};
+    const canControl = !!router.connected && !!caps.block;
+    const canWifi = !!router.connected && !!caps.wifi;
+    const color = nodeColor(device);
+    const name = device.label || device.name || device.vendor || device.ip
+      || (isRouter ? "Router" : "Device");
+    const online = device.online !== false;
+
+    let statusText = "Offline";
+    let statusClass = "offline";
+    if (online) {
+      statusText = isRouter
+        ? (router.connected ? "Router connected" : "Gateway")
+        : (device.state === "router" ? "On router" : "Online");
+      statusClass = "online";
+    } else if (device.responded === false) {
+      statusText = "Last seen";
+    }
+
+    const tags = [];
+    if (device.is_self) tags.push('<span class="tag you">You</span>');
+    if (isRouter) tags.push('<span class="tag router">Router</span>');
+    if (device.blocked) tags.push('<span class="tag blocked">Blocked</span>');
+    if (device.wifi_blocked) tags.push('<span class="tag blocked">Wi-Fi blocked</span>');
+    if (device.random_mac) tags.push('<span class="tag">Private MAC</span>');
+
+    const fact = (label, value, mono = false) => {
+      if (value === undefined || value === null || value === "") return "";
+      return `<dt>${escapeHtml(label)}</dt><dd${mono ? ' class="mono"' : ""}>${escapeHtml(value)}</dd>`;
+    };
+
+    const facts = [];
+    if (isRouter) {
+      facts.push(fact("Model", router.model || device.name || "Unknown"));
+      facts.push(fact("Admin address", router.host || device.ip || "", true));
+      facts.push(fact("Control", router.connected ? "Connected" : "Not connected"));
+      facts.push(fact("Internet filter", caps.block ? "Available" : "Unavailable"));
+      facts.push(fact("Wi-Fi filter", caps.wifi ? "Available" : "Unavailable"));
+      facts.push(fact("Devices seen", String(state.devices.filter((item) => !item.is_gateway).length)));
+      if ((caps.notes || []).length) facts.push(fact("Router note", caps.notes[0]));
+    } else {
+      if (device.label && device.name) facts.push(fact("Hostname", device.name));
+      facts.push(fact("Address", device.ip || "—", true));
+      facts.push(fact("MAC address", device.mac || "Unknown", true));
+      facts.push(fact("Vendor", device.vendor || "Unresolved"));
+      if (device.mac) {
+        facts.push(`<dt>Type</dt><dd class="type-fact">${typeSelectMarkup(device)}</dd>`);
+      } else {
+        facts.push(fact("Type", TYPE_LABELS[device.type] || "Device"));
+      }
+      if (device.connection) {
+        facts.push(fact(
+          "Connection",
+          device.connection === "lan"
+            ? "Ethernet"
+            : `Wi-Fi${device.ssid ? ` · ${device.ssid}` : ""}`,
+        ));
+      }
+      if (device.source) {
+        const sources = {
+          lan: "Ping + ARP", router: "Router client list", "lan+router": "Ping + router",
+        };
+        facts.push(fact("Discovered", sources[device.source] || device.source));
+      }
+      if (device.last_seen) facts.push(fact("Last seen", timeAgo(device.last_seen)));
+      if (device.is_self) {
+        facts.push(fact("Interface", net.interface || ""));
+        if (net.link_mbps) facts.push(fact("Link rate", `${Math.round(net.link_mbps)} Mbps`));
+        if (net.signal_dbm) facts.push(fact("Signal", `${net.signal_dbm} dBm`));
+        if (net.rx_bytes !== undefined || net.tx_bytes !== undefined) {
+          facts.push(fact("Traffic", `↓ ${fmtBytes(net.rx_bytes)}   ↑ ${fmtBytes(net.tx_bytes)}`));
+        }
+      }
+    }
+
+    const canToggleInternet = canControl && !isRouter && !device.is_self && !!device.mac;
+    const wifiDevice = device.connection !== "lan";
+    const canToggleWifi = canWifi && !isRouter && !device.is_self && !!device.mac && wifiDevice;
+
+    const accessRow = (scope, title, hint, checked, enabled) => `
+      <div class="access-row ${enabled ? "" : "locked"}" data-scope="${scope}">
+        <div class="access-text">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(hint)}</span>
+        </div>
+        ${switchMarkup(`toggle-${scope}`, device.mac || "", checked, enabled, `${title}: ${hint}`)}
+      </div>`;
+
+    let accessHtml = "";
+    if (!isRouter) {
+      const internetHint = canToggleInternet
+        ? "Router firewall MAC filter"
+        : (device.is_self ? "NetDash never blocks this computer" : "Connect the router to control access");
+      const wifiHint = canToggleWifi
+        ? "Router WLAN access control"
+        : (!canWifi
+          ? "Not available on this router"
+          : (wifiDevice ? "Connect the router to control access" : "This device uses Ethernet"));
+      accessHtml = `
+        <div class="node-access">
+          ${accessRow("internet", "Internet access", internetHint, !device.blocked, canToggleInternet)}
+          ${accessRow("wifi", "Wi-Fi access", wifiHint, !device.wifi_blocked, canToggleWifi)}
+        </div>`;
+    }
+
+    const adminAddress = router.host || device.ip || "";
+    const adminLink = isRouter && adminAddress
+      ? `<a class="btn ghost" href="https://${escapeHtml(adminAddress)}/" target="_blank" rel="noopener noreferrer">Admin page</a>`
+      : "";
+    const connectionText = device.connection === "lan"
+      ? "Ethernet"
+      : (device.connection ? "Wi-Fi" : "Network");
+
+    ui.nodePanel.innerHTML = `
+      <div class="node-panel-head">
+        <span class="node-badge" style="color:${color}">
+          <svg viewBox="0 0 24 24" aria-hidden="true">${deviceIcon(device)}</svg>
+        </span>
+        <div class="node-id">
+          <div class="node-name" id="node-panel-name">${escapeHtml(name)}</div>
+          <div class="node-kind">${escapeHtml(isRouter ? "Network hub" : (TYPE_LABELS[device.type] || "Device"))} · ${escapeHtml(connectionText)}</div>
+        </div>
+        <button class="btn ghost icon-only node-close" type="button" aria-label="Close details">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="icon"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      ${tags.length ? `<div class="node-tags">${tags.join("")}</div>` : ""}
+      <div class="node-status">
+        <span class="status ${statusClass}"><i></i>${statusText}</span>
+        <span class="addr">${escapeHtml(device.ip || "")}</span>
+      </div>
+      <div class="node-buttons">
+        <button class="btn" type="button" data-act="focus">Center in view</button>
+        ${device.mac ? '<button class="btn ghost" type="button" data-act="rename">Rename</button>' : ""}
+        ${adminLink}
+      </div>
+      <dl class="node-facts">${facts.join("")}</dl>
+      ${accessHtml}
+      <p class="node-note">${isRouter
+        ? "The router is the hub every link terminates at. Devices come from the local scan and the router's client list."
+        : (canControl
+          ? "Access changes are written to the router and verified by reading the rule list back."
+          : "Connect the router in Settings to switch internet access from this map.")}</p>`;
+
+    ui.nodePanel.querySelector(".node-close").addEventListener("click", closeNodePanel);
+    const focusButton = ui.nodePanel.querySelector('[data-act="focus"]');
+    if (focusButton) {
+      focusButton.addEventListener("click", () => {
+        if (state.scene) state.scene.focus(key);
+      });
+    }
+    const renameButton = ui.nodePanel.querySelector('[data-act="rename"]');
+    if (renameButton) {
+      renameButton.addEventListener("click", () => startPanelRename(device, key));
+    }
+    const typeSelect = ui.nodePanel.querySelector(".type-select");
+    if (typeSelect) {
+      typeSelect.addEventListener("change", () => setDeviceType(device, typeSelect.value, typeSelect));
+    }
+    const internetInput = ui.nodePanel.querySelector(".toggle-internet input");
+    if (internetInput) {
+      internetInput.addEventListener("change", () => setAccess(device, "internet", internetInput));
+    }
+    const wifiInput = ui.nodePanel.querySelector(".toggle-wifi input");
+    if (wifiInput) {
+      wifiInput.addEventListener("change", () => setAccess(device, "wifi", wifiInput));
+    }
+    for (const row of ui.nodePanel.querySelectorAll(".access-row.locked")) {
+      row.addEventListener("click", () => explainAccess(device));
+    }
+    state.panelEditing = false;
+  }
+
+  function startPanelRename(device, key) {
+    const nameNode = ui.nodePanel.querySelector("#node-panel-name");
+    if (!nameNode || !device.mac || nameNode.querySelector("input")) return;
+    state.panelEditing = true;
+    const input = document.createElement("input");
+    input.className = "node-name-input";
+    input.type = "text";
+    input.maxLength = 48;
+    input.value = device.label || "";
+    input.placeholder = device.name || "Label";
+    nameNode.textContent = "";
+    nameNode.appendChild(input);
+    input.focus();
+    input.select();
+
+    let finished = false;
+    const finish = async (save) => {
+      if (finished) return;
+      finished = true;
+      const value = input.value.trim();
+      if (!save || value === (device.label || "")) {
+        state.panelEditing = false;
+        refreshNodePanel();
+        return;
+      }
+      try {
+        const result = await api("/api/device/label", {
+          method: "POST",
+          body: { mac: device.mac, label: value },
+        });
+        device.label = result.label || "";
+        toast(result.label ? "Label saved." : "Label cleared.", "ok");
+        await refreshDevices(false);
+      } catch (error) {
+        toast(error.message || "Could not save the label.", "error", error.hint || "");
+      } finally {
+        state.panelEditing = false;
+        refreshNodePanel();
+      }
+    };
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        finish(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        finish(false);
+      }
+    });
+    input.addEventListener("blur", () => finish(true));
+  }
+
+  function toggle3dLink(device, key) {
+    if (!device) return;
+    select3dNode(device, key);
+    if (device.is_gateway) return;
+    if (device.is_self) {
+      toast("NetDash will not block the computer it runs on.", "error");
+      return;
+    }
+    if (device.online === false) {
+      toast("This device is offline, so there is nothing to disconnect.", "error");
+      return;
+    }
+    const router = (state.snapshot && state.snapshot.router) || {};
+    const caps = router.capabilities || {};
+    if (!router.connected || !caps.block) {
+      explainAccess(device);
+      return;
+    }
+    setAccess(device, "internet", null, !!device.blocked);
+  }
+
   // -------------------------------------------------------------- speed test
   function formatMbps(value) {
     if (value === null || value === undefined) return "—";
@@ -795,9 +1445,9 @@
     }
   }
 
-  async function setAccess(device, scope, input) {
+  async function setAccess(device, scope, input, forcedAllowed) {
     const label = scope === "wifi" ? "Wi-Fi access" : "Internet access";
-    const allowed = input.checked;
+    const allowed = forcedAllowed === undefined ? input.checked : !!forcedAllowed;
     const who = device.name || device.ip;
 
     if (!allowed) {
@@ -810,13 +1460,13 @@
         "Block"
       );
       if (!ok) {
-        input.checked = true;
+        if (input) input.checked = true;
         return;
       }
     }
 
-    const cell = input.closest("td.toggle-cell");
-    input.disabled = true;
+    const cell = input ? input.closest("td.toggle-cell") : null;
+    if (input) input.disabled = true;
     if (cell) cell.classList.add("busy");
     try {
       const result = await api("/api/device/access", {
@@ -832,13 +1482,39 @@
       await refreshState();
       await refreshDevices(false);
     } catch (error) {
-      input.checked = !allowed;
+      if (input) input.checked = !allowed;
       toast(error.message || "Could not change device access.", "error", error.hint || "");
     } finally {
       if (cell && cell.isConnected) {
         cell.classList.remove("busy");
         input.disabled = false;
       }
+    }
+  }
+
+  async function setDeviceType(device, type, control) {
+    if (!device || !device.mac) return;
+    const autoLabel = TYPE_LABELS[device.auto_type || device.type] || "Other";
+    if (control) control.disabled = true;
+    try {
+      await api("/api/device/type", {
+        method: "POST",
+        body: { mac: device.mac, type },
+      });
+      toast(
+        type === "auto"
+          ? `Type reset to automatic (${autoLabel}).`
+          : `Type set to ${TYPE_LABELS[type] || type}.`,
+        "ok",
+      );
+      await refreshDevices(false);
+    } catch (error) {
+      toast(error.message || "Could not change the device type.", "error", error.hint || "");
+      if (control && control.isConnected) {
+        control.value = device.type_override || "auto";
+      }
+    } finally {
+      if (control && control.isConnected) control.disabled = false;
     }
   }
 
@@ -1031,12 +1707,29 @@
 
   async function boot() {
     try {
+      state.hideOffline = localStorage.getItem("netdash-hide-offline") === "1";
+    } catch (error) {
+      /* storage is optional */
+    }
+    updateHideOfflineButton();
+    updateLegendState();
+
+    try {
       await refreshState();
     } catch (error) {
       toast(error.message || "Could not load NetDash.", "error");
       return;
     }
     ui.routerHost.placeholder = (state.snapshot.network && state.snapshot.network.gateway) || "192.168.1.1";
+
+    let savedView = "";
+    try {
+      savedView = localStorage.getItem("netdash-view") || "";
+    } catch (error) {
+      /* storage is optional */
+    }
+    if (savedView === "3d") setView("3d", false);
+
     try {
       await refreshDevices(false);
     } catch (error) {
@@ -1084,8 +1777,45 @@
   }
   renderSortButtons();
 
+  for (const tab of ui.viewTabs) {
+    tab.addEventListener("click", () => setView(tab.dataset.view));
+  }
+  $("#scene-scan").addEventListener("click", doScan);
+  $("#scene-empty-scan").addEventListener("click", doScan);
+  ui.sceneRotate.addEventListener("click", () => {
+    if (!state.scene) return;
+    const next = !state.scene.getAutoRotate();
+    state.scene.setAutoRotate(next);
+    ui.sceneRotate.setAttribute("aria-pressed", next ? "true" : "false");
+    ui.sceneRotate.title = next ? "Stop auto rotation" : "Start auto rotation";
+  });
+  ui.sceneHideOffline.addEventListener("click", toggleHideOffline);
+  for (const item of ui.legendItems) {
+    item.addEventListener("click", () => setFocusType(item.dataset.type));
+  }
+  ui.legendClear.addEventListener("click", clearFocus);
+  $("#scene-zoom-in").addEventListener("click", () => state.scene && state.scene.zoomBy(0.82));
+  $("#scene-zoom-out").addEventListener("click", () => state.scene && state.scene.zoomBy(1.22));
+  $("#scene-reset").addEventListener("click", () => state.scene && state.scene.reset());
+  ui.sceneFullscreen.addEventListener("click", toggleSceneFullscreen);
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+  document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !ui.drawer.hidden) closeDrawer();
+    if ((event.key === "f" || event.key === "F")
+      && document.activeElement === ui.sceneCanvas
+      && state.view === "3d") {
+      event.preventDefault();
+      toggleSceneFullscreen();
+      return;
+    }
+    if (event.key !== "Escape") return;
+    if (isSceneFullscreen()) return;
+    if (!ui.drawer.hidden) {
+      closeDrawer();
+    } else if (!ui.nodePanel.hidden && !state.panelEditing) {
+      closeNodePanel();
+    }
   });
 
   boot();

@@ -11,7 +11,7 @@ from . import __version__, config
 from .dnsman import DnsManager
 from .netinfo import NetworkInfo, default_gateway
 from .router import RouterError, RouterManager, Unsupported
-from .scanner import DeviceScanner, device_type, vendor_for
+from .scanner import DeviceScanner, device_type, type_from_name, vendor_for
 from .speedtest import SpeedTest
 from .sysutil import is_admin
 
@@ -21,6 +21,23 @@ def _normalize_mac(value: str) -> str:
     if len(raw) != 12:
         return ""
     return ":".join(raw[i : i + 2] for i in range(0, 12, 2)).lower()
+
+
+# A user label can refine a guess, but it should not replace a more specific
+# hostname hint (for example "Gaming Console" must not turn an Xbox into a
+# generic console).
+_TYPE_RANK = {
+    "other": 0,
+    "iot": 1,
+    "console": 2,
+    "router": 4,
+}
+
+_DEVICE_TYPES = {
+    "phone", "tablet", "computer", "laptop", "tv", "camera", "light",
+    "speaker", "xbox", "playstation", "console", "printer", "iot",
+    "router", "other",
+}
 
 
 class ApiError(Exception):
@@ -87,6 +104,9 @@ class App:
             if existing:
                 if not existing.get("name") and item.get("name"):
                     existing["name"] = item["name"]
+                existing["type"] = device_type(
+                    existing.get("vendor") or vendor_for(mac), mac, existing.get("name", "")
+                )
                 existing["source"] = "lan+router"
                 existing["connection"] = item.get("connection", existing.get("connection", ""))
                 existing["blocked"] = bool(item.get("blocked"))
@@ -94,13 +114,15 @@ class App:
                 if item.get("ssid"):
                     existing["ssid"] = item["ssid"]
             else:
+                vendor = vendor_for(mac)
+                name = item.get("name", "")
                 merged.append(
                     {
                         "ip": item.get("ip", ""),
                         "mac": mac,
-                        "name": item.get("name", ""),
-                        "vendor": vendor_for(mac),
-                        "type": device_type(vendor_for(mac), mac),
+                        "name": name,
+                        "vendor": vendor,
+                        "type": device_type(vendor, mac, name),
                         "online": True,
                         "responded": None,
                         "state": "router",
@@ -191,10 +213,27 @@ class App:
         }
 
     def _apply_labels(self, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        labels = config.load().get("labels") or {}
+        cfg = config.load()
+        labels = cfg.get("labels") or {}
+        type_overrides = cfg.get("types") or {}
         for device in devices:
             mac = str(device.get("mac") or "").lower()
             device["label"] = labels.get(mac, "") if mac else ""
+            hinted = type_from_name(device["label"])
+            if hinted and not device.get("is_gateway"):
+                current = device.get("type") or "other"
+                if _TYPE_RANK.get(hinted, 3) >= _TYPE_RANK.get(current, 3):
+                    device["type"] = hinted
+
+            # The auto-detected type is what "Auto" restores. A manual choice
+            # stored under the MAC wins over both vendor and label guesses.
+            device["auto_type"] = device.get("type") or "other"
+            override = str(type_overrides.get(mac, "")).strip().lower() if mac else ""
+            if not device.get("is_gateway") and override in _DEVICE_TYPES:
+                device["type"] = override
+                device["type_override"] = override
+            else:
+                device["type_override"] = ""
         return devices
 
     def set_device_label(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -214,6 +253,27 @@ class App:
         config.save(cfg)
         self.cfg = cfg
         return {"ok": True, "mac": mac, "label": label}
+
+    def set_device_type(self, body: dict[str, Any]) -> dict[str, Any]:
+        mac = _normalize_mac(str(body.get("mac") or ""))
+        if not mac:
+            raise ApiError("A valid device MAC address is required.")
+        requested = str(body.get("type") or "auto").strip().lower()
+        if requested in ("", "auto"):
+            requested = ""
+        elif requested not in _DEVICE_TYPES:
+            raise ApiError("Unknown device type.")
+
+        cfg = config.load()
+        overrides = dict(cfg.get("types") or {})
+        if requested:
+            overrides[mac] = requested
+        else:
+            overrides.pop(mac, None)
+        cfg["types"] = overrides
+        config.save(cfg)
+        self.cfg = cfg
+        return {"ok": True, "mac": mac, "type": requested, "auto": not requested}
 
     def scan(self) -> dict[str, Any]:
         # Force a fresh sweep from the UI button.

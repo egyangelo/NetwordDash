@@ -28,6 +28,18 @@
         <p id="hostname">Local network overview</p>
       </div>
     </div>
+    <div class="view-switch" role="tablist" aria-label="Dashboard view">
+      <button class="view-tab active" type="button" role="tab" aria-selected="true"
+              data-view="dashboard">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Dashboard
+      </button>
+      <button class="view-tab" type="button" role="tab" aria-selected="false"
+              data-view="3d">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6 21 7.4v9.2L12 21.4 3 16.6V7.4z"/><path d="M3 7.4 12 12l9-4.6M12 12v9.4"/></svg>
+        3D Map
+      </button>
+    </div>
     <div class="topbar-actions">
       <span id="admin-pill" class="pill" hidden>
         <span class="dot"></span><span id="admin-text">Read-only</span>
@@ -45,7 +57,7 @@
     </div>
   </header>
 
-  <main>
+  <main id="view-dashboard">
     <section class="cards" aria-label="Network summary">
       <article class="card">
         <div class="card-label">
@@ -189,6 +201,83 @@
     </section>
   </main>
 
+  <section class="view-3d" id="view-3d" hidden aria-label="3D network map">
+    <div class="scene-shell" id="scene-shell">
+      <canvas id="scene3d" tabindex="0" aria-label="3D network map. Drag to orbit, scroll to zoom, click a device for details.">Your browser does not support the canvas element.</canvas>
+
+      <div class="scene-hud">
+        <span class="scene-stat"><span class="stat-dot online"></span><b id="scene-online">0</b> online</span>
+        <span class="scene-stat"><span class="stat-dot offline"></span><b id="scene-offline">0</b> offline</span>
+        <span class="scene-stat"><span class="stat-dot blocked"></span><b id="scene-blocked">0</b> blocked</span>
+        <span class="scene-stat router-stat" id="scene-router-stat">
+          <span class="stat-dot"></span><span id="scene-router-text">Router not connected</span>
+        </span>
+      </div>
+
+      <div class="scene-tools">
+        <button class="scene-btn" id="scene-scan" type="button" title="Scan the local network" aria-label="Scan the local network">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+        </button>
+        <button class="scene-btn" id="scene-rotate" type="button" title="Toggle auto rotation" aria-label="Toggle auto rotation" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3.2-6.9"/><path d="M21 3v6h-6"/></svg>
+        </button>
+        <button class="scene-btn" id="scene-hide-offline" type="button" title="Hide offline devices" aria-label="Hide offline devices" aria-pressed="false">
+          <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="icon-eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18"/><path d="M10.6 6.2A11 11 0 0 1 12 6c6.5 0 10 6 10 6a17.5 17.5 0 0 1-3.2 3.8M6.6 6.6C3.8 8.3 2 12 2 12s3.5 6 10 6a10 10 0 0 0 4.5-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+        </button>
+        <button class="scene-btn" id="scene-zoom-out" type="button" title="Zoom out" aria-label="Zoom out">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/></svg>
+        </button>
+        <button class="scene-btn" id="scene-zoom-in" type="button" title="Zoom in" aria-label="Zoom in">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6M11 8v6"/></svg>
+        </button>
+        <button class="scene-btn" id="scene-reset" type="button" title="Reset view" aria-label="Reset view">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/></svg>
+        </button>
+        <button class="scene-btn" id="scene-fullscreen" type="button" title="Full screen" aria-label="Enter full screen" aria-pressed="false">
+          <svg class="icon-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+          <svg class="icon-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3M16 3v3a2 2 0 0 0 2 2h3M8 21v-3a2 2 0 0 0-2-2H3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+        </button>
+      </div>
+
+      <div class="scene-tip" id="scene-tip" hidden></div>
+
+      <div class="scene-empty" id="scene-empty" hidden>
+        <div class="scene-empty-card">
+          <span class="scene-empty-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6 21 7.4v9.2L12 21.4 3 16.6V7.4z"/><path d="M3 7.4 12 12l9-4.6M12 12v9.4"/></svg>
+          </span>
+          <p id="scene-empty-text">No devices yet. Run a scan to build the map.</p>
+          <button class="btn primary" id="scene-empty-scan" type="button">Scan now</button>
+        </div>
+      </div>
+
+      <div class="scene-legend" id="scene-legend" role="group" aria-label="Focus by device type">
+        <span class="legend-title">Focus</span>
+        <button class="legend-item" type="button" data-type="router" aria-pressed="false" style="--c:#a78bfa"><i></i>Router</button>
+        <button class="legend-item" type="button" data-type="computer" aria-pressed="false" style="--c:#38bdf8"><i></i>Desktop</button>
+        <button class="legend-item" type="button" data-type="laptop" aria-pressed="false" style="--c:#22d3ee"><i></i>Laptop</button>
+        <button class="legend-item" type="button" data-type="tablet" aria-pressed="false" style="--c:#818cf8"><i></i>Tablet</button>
+        <button class="legend-item" type="button" data-type="phone" aria-pressed="false" style="--c:#60a5fa"><i></i>Phone</button>
+        <button class="legend-item" type="button" data-type="tv" aria-pressed="false" style="--c:#e879f9"><i></i>TV</button>
+        <button class="legend-item" type="button" data-type="camera" aria-pressed="false" style="--c:#f43f5e"><i></i>Camera</button>
+        <button class="legend-item" type="button" data-type="light" aria-pressed="false" style="--c:#fde047"><i></i>Light</button>
+        <button class="legend-item" type="button" data-type="xbox" aria-pressed="false" style="--c:#4ade80"><i></i>Xbox</button>
+        <button class="legend-item" type="button" data-type="playstation" aria-pressed="false" style="--c:#3b82f6"><i></i>PS</button>
+        <button class="legend-item" type="button" data-type="console" aria-pressed="false" style="--c:#86efac"><i></i>Console</button>
+        <button class="legend-item" type="button" data-type="speaker" aria-pressed="false" style="--c:#fb923c"><i></i>Speaker</button>
+        <button class="legend-item" type="button" data-type="printer" aria-pressed="false" style="--c:#fb7185"><i></i>Printer</button>
+        <button class="legend-item" type="button" data-type="iot" aria-pressed="false" style="--c:#fbbf24"><i></i>IoT</button>
+        <button class="legend-item" type="button" data-type="other" aria-pressed="false" style="--c:#94a3b8"><i></i>Other</button>
+        <button class="legend-clear" id="legend-clear" type="button" title="Show all device types" hidden>Clear</button>
+      </div>
+
+      <p class="scene-hint">Drag to orbit · Shift-drag to pan · Scroll to zoom · Click a device or link</p>
+
+      <aside class="node-panel" id="node-panel" hidden aria-live="polite" aria-label="Device details"></aside>
+    </div>
+  </section>
+
   <footer class="foot">
     <span id="foot-version">NetDash</span>
     <span class="foot-sep">•</span>
@@ -268,6 +357,7 @@
   </form>
 </dialog>
 
+<script src="/static/scene3d.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
