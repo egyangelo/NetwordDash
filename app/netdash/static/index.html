@@ -234,6 +234,18 @@
       </div>
 
       <div class="scene-tools">
+        <div class="scene-layout" role="group" aria-label="Map layout">
+          <button class="scene-layout-btn active" type="button" data-scene-layout="orbit"
+                  aria-pressed="true" title="Orbit layout">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.6"/><ellipse cx="12" cy="12" rx="9" ry="4.1" transform="rotate(-28 12 12)"/><circle cx="19.4" cy="8.2" r="1.6"/></svg>
+            <span class="label">Orbit</span>
+          </button>
+          <button class="scene-layout-btn" type="button" data-scene-layout="tree"
+                  aria-pressed="false" title="Tree layout">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="2.5" width="7" height="5" rx="1.3"/><rect x="2.5" y="16.5" width="7" height="5" rx="1.3"/><rect x="14.5" y="16.5" width="7" height="5" rx="1.3"/><path d="M12 7.5v6M6 16.5v-3h12v3"/></svg>
+            <span class="label">Tree</span>
+          </button>
+        </div>
         <button class="scene-btn" id="scene-scan" type="button" title="Scan the local network" aria-label="Scan the local network">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
         </button>
@@ -321,14 +333,16 @@
         <span>Router address</span>
         <input id="router-host" type="text" placeholder="192.168.1.1" autocomplete="off" inputmode="decimal">
       </label>
-      <label class="field">
-        <span>Username</span>
-        <input id="router-user" type="text" placeholder="admin" autocomplete="username">
-      </label>
-      <label class="field">
-        <span>Password</span>
-        <input id="router-pass" type="password" placeholder="Router password" autocomplete="current-password">
-      </label>
+      <div class="field-split">
+        <label class="field">
+          <span>Username</span>
+          <input id="router-user" type="text" placeholder="admin" autocomplete="username">
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <input id="router-pass" type="password" placeholder="Router password" autocomplete="current-password">
+        </label>
+      </div>
       <label class="check">
         <input id="router-remember" type="checkbox" checked>
         <span>Remember on this computer</span>
@@ -338,17 +352,17 @@
         <button id="router-disconnect" class="btn ghost" type="button" hidden>Disconnect</button>
       </div>
       <button id="router-test" class="btn ghost full" type="button" hidden>Test router control</button>
-      <button id="router-diag" class="btn ghost full" type="button" hidden>Download router diagnostics</button>
-      <p class="hint-line" id="router-caps"></p>
     </section>
 
     <section class="field-group">
       <h3>Scanning</h3>
-      <label class="field">
+      <div class="field">
         <span>Auto refresh (seconds)</span>
-        <input id="scan-interval" type="number" min="10" max="600" step="5" value="45">
-      </label>
-      <button id="save-settings" class="btn" type="button">Save settings</button>
+        <div class="field-inline">
+          <input id="scan-interval" type="number" min="10" max="600" step="5" value="45">
+          <button id="save-settings" class="btn" type="button">Save settings</button>
+        </div>
+      </div>
     </section>
 
     <section class="field-group">
@@ -361,6 +375,17 @@
         When off, MAC addresses are masked and revealed only while you hover,
         tap or focus them. Applies to this browser.
       </p>
+      <label class="field">
+        <span>Device icon size</span>
+        <select id="icon-scale">
+          <option value="1" selected>100%</option>
+          <option value="0.9">90%</option>
+          <option value="0.8">80%</option>
+          <option value="0.7">70%</option>
+          <option value="0.6">60%</option>
+          <option value="0.5">50%</option>
+        </select>
+      </label>
     </section>
 
     <section class="field-group">

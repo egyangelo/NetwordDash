@@ -44,9 +44,7 @@
     routerRemember: $("#router-remember"),
     routerConnect: $("#router-connect"),
     routerDisconnect: $("#router-disconnect"),
-    routerDiag: $("#router-diag"),
     routerTest: $("#router-test"),
-    routerCaps: $("#router-caps"),
     speedtest: $("#speedtest-btn"),
     speedPing: $("#speed-ping"),
     speedJitter: $("#speed-jitter"),
@@ -56,6 +54,7 @@
     speedPhase: $("#speed-phase"),
     scanInterval: $("#scan-interval"),
     showMac: $("#show-mac"),
+    iconScale: $("#icon-scale"),
     configPath: $("#config-path"),
     toasts: $("#toasts"),
     dialog: $("#confirm-dialog"),
@@ -77,6 +76,7 @@
     sceneRouterStat: $("#scene-router-stat"),
     sceneRouterText: $("#scene-router-text"),
     sceneRotate: $("#scene-rotate"),
+    sceneLayoutButtons: document.querySelectorAll("[data-scene-layout]"),
     sceneHideOffline: $("#scene-hide-offline"),
     sceneFullscreen: $("#scene-fullscreen"),
     sceneLegend: $("#scene-legend"),
@@ -104,9 +104,11 @@
     panelKey: "",
     panelEditing: false,
     hideOffline: false,
+    sceneLayout: "orbit",
     focusTypes: [],
     devicesLoaded: false,
     showMac: true,
+    iconScale: 1,
     theme: "dark",
     themeMode: "auto",
   };
@@ -248,6 +250,26 @@
     node.setAttribute("aria-pressed", revealed ? "true" : "false");
     node.setAttribute("aria-label", label);
     node.title = label;
+  }
+
+  const ICON_SCALES = [1, 0.9, 0.8, 0.7, 0.6, 0.5];
+
+  // Device icons: the table chip is scaled with a CSS variable, the 3D shapes
+  // through the scene payload, so every view follows the same setting.
+  function applyIconScale(value, options = {}) {
+    const { persist = true } = options;
+    const next = ICON_SCALES.includes(Number(value)) ? Number(value) : 1;
+    state.iconScale = next;
+    document.documentElement.style.setProperty("--icon-scale", String(next));
+    if (ui.iconScale) ui.iconScale.value = String(next);
+    if (persist) {
+      try {
+        localStorage.setItem("netdash-icon-scale", String(next));
+      } catch (error) {
+        /* private mode: remembering the size is optional */
+      }
+    }
+    syncScene();
   }
 
   function applyShowMac(show, options = {}) {
@@ -477,26 +499,8 @@
       ? `Connected to ${router.model || "router"} at ${router.host}.`
       : "Not connected.";
     ui.routerDisconnect.hidden = !router.connected;
-    ui.routerDiag.hidden = !router.connected;
     ui.routerTest.hidden = !router.connected;
     ui.routerConnect.textContent = router.connected ? "Reconnect" : "Connect";
-
-    const notes = [];
-    if (router.connected) {
-      if (caps.devices) notes.push("Device list is read from the router.");
-      if (caps.block) {
-        notes.push("Internet blocking uses the router's firewall MAC filter (routed traffic only).");
-      } else {
-        notes.push("Per-device Internet blocking is unavailable.");
-      }
-      if (caps.wifi) {
-        notes.push("Wi-Fi blocking uses the router's WLAN access control for the device's SSID.");
-      } else {
-        notes.push("Per-device Wi-Fi blocking is unavailable.");
-      }
-      for (const note of caps.notes || []) if (!notes.includes(note)) notes.push(note);
-    }
-    ui.routerCaps.textContent = notes.join(" ");
 
     const canControl = !!router.connected && !!caps.block;
     const canWifi = !!router.connected && !!caps.wifi;
@@ -867,6 +871,7 @@
       onLinkAction: (device, key) => toggle3dLink(device, key),
       onHover: showSceneTip,
     });
+    state.scene.setLayout(state.sceneLayout);
     return state.scene;
   }
 
@@ -885,6 +890,7 @@
       hideOffline: !!state.hideOffline,
       focusTypes: state.focusTypes.slice(),
       theme: state.theme,
+      iconScale: state.iconScale,
     });
     updateSceneHud();
   }
@@ -931,6 +937,37 @@
     ui.sceneHideOffline.setAttribute(
       "aria-label", active ? "Show offline devices" : "Hide offline devices",
     );
+  }
+
+  function updateSceneLayout() {
+    const tree = state.sceneLayout === "tree";
+    for (const button of ui.sceneLayoutButtons) {
+      const active = button.dataset.sceneLayout === state.sceneLayout;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+    if (tree && state.scene && state.scene.getAutoRotate()) {
+      state.scene.setAutoRotate(false);
+    }
+    const rotating = !tree && !!(state.scene && state.scene.getAutoRotate());
+    ui.sceneRotate.disabled = tree;
+    ui.sceneRotate.setAttribute("aria-pressed", rotating ? "true" : "false");
+    ui.sceneRotate.title = tree
+      ? "Auto rotation is off in tree view"
+      : (rotating ? "Stop auto rotation" : "Start auto rotation");
+  }
+
+  function setSceneLayout(name) {
+    const next = name === "tree" ? "tree" : "orbit";
+    if (next === state.sceneLayout) return;
+    state.sceneLayout = next;
+    try {
+      localStorage.setItem("netdash-scene-layout", next);
+    } catch (error) {
+      /* private mode: remembering the layout is optional */
+    }
+    updateSceneLayout();
+    if (state.scene) state.scene.setLayout(next);
   }
 
   function toggleHideOffline() {
@@ -1791,24 +1828,6 @@
     }
   }
 
-  async function downloadDiagnostics() {
-    try {
-      const data = await api("/api/router/diagnostics");
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "netdash-router-diagnostics.json";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      toast("Diagnostics saved.", "ok");
-    } catch (error) {
-      toast(error.message || "Could not read router diagnostics.", "error", error.hint || "");
-    }
-  }
-
   async function saveSettings() {
     try {
       await api("/api/settings", {
@@ -1851,6 +1870,9 @@
     try {
       state.hideOffline = localStorage.getItem("netdash-hide-offline") === "1";
       state.showMac = localStorage.getItem("netdash-show-mac") !== "0";
+      state.sceneLayout = localStorage.getItem("netdash-scene-layout") === "tree"
+        ? "tree" : "orbit";
+      state.iconScale = Number(localStorage.getItem("netdash-icon-scale")) || 1;
       const storedTheme = localStorage.getItem("netdash-theme") || "auto";
       state.themeMode = ["auto", "light", "dark"].includes(storedTheme) ? storedTheme : "auto";
     } catch (error) {
@@ -1862,7 +1884,9 @@
     updateAppearance();
     updateHideOfflineButton();
     updateLegendState();
+    updateSceneLayout();
     if (ui.showMac) ui.showMac.checked = state.showMac;
+    applyIconScale(state.iconScale, { persist: false });
 
     try {
       await refreshState();
@@ -1905,10 +1929,10 @@
   ui.drawerBackdrop.addEventListener("click", closeDrawer);
   ui.routerConnect.addEventListener("click", connectRouter);
   ui.routerDisconnect.addEventListener("click", disconnectRouter);
-  ui.routerDiag.addEventListener("click", downloadDiagnostics);
   ui.routerTest.addEventListener("click", testRouterControl);
   $("#save-settings").addEventListener("click", saveSettings);
   ui.showMac.addEventListener("change", () => applyShowMac(ui.showMac.checked));
+  ui.iconScale.addEventListener("change", () => applyIconScale(ui.iconScale.value));
   ui.search.addEventListener("input", () => {
     state.filter = ui.search.value;
     renderDevices(state.lastPayload || { devices: state.devices, scanned_at: 0, subnet: "" });
@@ -1944,6 +1968,9 @@
     ui.sceneRotate.title = next ? "Stop auto rotation" : "Start auto rotation";
   });
   ui.sceneHideOffline.addEventListener("click", toggleHideOffline);
+  for (const button of ui.sceneLayoutButtons) {
+    button.addEventListener("click", () => setSceneLayout(button.dataset.sceneLayout));
+  }
   for (const item of ui.legendItems) {
     item.addEventListener("click", () => setFocusType(item.dataset.type));
   }

@@ -14,6 +14,21 @@
   const TAU = Math.PI * 2;
   const FLOOR_Y = -1.5;
   const ROUTER_Y = 1.25;
+  // Tree layout: the router hangs at the top, devices sit in a grid of
+  // branches below it, joined by one trunk and a horizontal arm per row.
+  const TREE_TOP = 7.4;
+  // Leave a visible stretch of trunk between the router and the first row.
+  const TREE_FIRST_ROW = TREE_TOP - 4;
+  // Rows need room for the shape plus its label underneath, and for the next
+  // row's arm to clear that label.
+  const TREE_ROW_GAP = 3.4;
+  const TREE_COL_GAP = 3.6;
+  const TREE_ARM_LIFT = TREE_ROW_GAP / 2 - 0.25;
+  const TREE_MAX_COLS = 5;
+  // Each branch runs in its own lane so the lines never overlap: x offset for
+  // the vertical run, y offset for the horizontal run within a row.
+  const TREE_LANE_X = 0.22;
+  const TREE_LANE_Y = 0.14;
   const FOV_DEG = 46;
   const MIN_DIST = 12;
   const MAX_DIST = 70;
@@ -871,16 +886,18 @@
     let lastTime = 0;
     let elapsed = 0;
     let autoRotate = false;
+    let layout = options.layout === "tree" ? "tree" : "orbit";
 
+    const ORBIT_HOME = { yaw: -0.66, pitch: 0.5 };
+    const TREE_HOME = { yaw: 0, pitch: 0.16 };
     const cam = {
-      yaw: -0.66,
-      pitch: 0.5,
+      yaw: layout === "tree" ? TREE_HOME.yaw : ORBIT_HOME.yaw,
+      pitch: layout === "tree" ? TREE_HOME.pitch : ORBIT_HOME.pitch,
       dist: 27,
       goalDist: 27,
       target: vec(0, 1.05, 0),
       goalTarget: vec(0, 1.05, 0),
     };
-    const home = { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist, target: vec(0, 1.05, 0) };
 
     let routerNode = null;
     let nodes = [];
@@ -889,6 +906,7 @@
     let networkInfo = {};
     let canControl = false;
     let canWifi = false;
+    let iconScale = 1;
     let selectedKey = "";
     let focusTypes = [];
     let themeName = "dark";
@@ -908,6 +926,44 @@
     let lastSatelliteCount = -1;
 
     // -- layout ----------------------------------------------------------
+    function treeMetrics(total) {
+      const count = Math.max(1, total);
+      const cols = clamp(
+        Math.min(count, Math.ceil(Math.sqrt(count * 1.6))), 1, TREE_MAX_COLS,
+      );
+      return { cols, rows: Math.ceil(count / cols) };
+    }
+
+    function treeRowY(row) {
+      return TREE_FIRST_ROW - row * TREE_ROW_GAP;
+    }
+
+    function treeSlot(index, total) {
+      const { cols } = treeMetrics(total);
+      const row = Math.floor(index / cols);
+      const rowStart = row * cols;
+      const rowCount = Math.max(1, Math.min(cols, total - rowStart));
+      // A short last row is centred under the grid instead of hanging left.
+      const col = (index % cols) + (cols - rowCount) / 2;
+      return vec((col - (cols - 1) / 2) * TREE_COL_GAP, treeRowY(row), 0);
+    }
+
+    function treeCenterY(total) {
+      if (!total) return TREE_FIRST_ROW;
+      const { rows } = treeMetrics(total);
+      return (TREE_TOP + treeRowY(rows - 1)) / 2;
+    }
+
+    function routerTarget() {
+      return layout === "tree" ? vec(0, TREE_TOP, 0) : vec(0, ROUTER_Y, 0);
+    }
+
+    function viewTarget() {
+      return layout === "tree"
+        ? vec(0, treeCenterY(nodes.length), 0)
+        : vec(0, 0.95, 0);
+    }
+
     function slotPosition(index, total) {
       const caps = [8, 12, 16, 20];
       let ring = 0;
@@ -961,14 +1017,15 @@
         connection: "lan",
         source: "router",
       };
+      const start = routerTarget();
       return {
         key: gateway ? nodeKey(gateway) : "__router__",
         device,
-        pos: vec(0, ROUTER_Y, 0),
-        target: vec(0, ROUTER_Y, 0),
-        animated: vec(0, ROUTER_Y, 0),
+        pos: vec(start.x, start.y, start.z),
+        target: vec(start.x, start.y, start.z),
+        animated: vec(start.x, start.y, start.z),
         phase: 0,
-        size: 1.9,
+        size: 1.9 * iconScale,
         isRouter: true,
         slot: -1,
       };
@@ -983,9 +1040,21 @@
       focusTypes = Array.isArray(payload.focusTypes) ? payload.focusTypes.slice() : [];
       themeName = payload.theme === "light" ? "light" : "dark";
       palette = SCENE_PALETTES[themeName];
+      const requestedScale = Number(payload.iconScale);
+      iconScale = Number.isFinite(requestedScale) ? clamp(requestedScale, 0.4, 1) : 1;
       const hideOffline = !!payload.hideOffline;
 
-      routerNode = makeRouterNode();
+      // Keep the existing router node so a layout switch animates instead of
+      // snapping when the next refresh lands.
+      const routed = makeRouterNode();
+      if (routerNode) {
+        routerNode.key = routed.key;
+        routerNode.device = routed.device;
+        routerNode.target = routed.target;
+        routerNode.size = routed.size;
+      } else {
+        routerNode = routed;
+      }
 
       const satellites = deviceList.filter((device) => (
         !device.is_gateway && (!hideOffline || device.online !== false)
@@ -994,7 +1063,9 @@
       satellites.forEach((device, index) => {
         const key = nodeKey(device);
         alive.add(key);
-        const target = slotPosition(index, satellites.length);
+        const target = layout === "tree"
+          ? treeSlot(index, satellites.length)
+          : slotPosition(index, satellites.length);
         let node = nodes.find((item) => item.key === key);
         if (!node) {
           node = {
@@ -1004,7 +1075,7 @@
             target,
             animated: vec(0.5, ROUTER_Y, 0.5),
             phase: (index * 1.7) % TAU,
-            size: device.is_self ? 1.2 : 1.05,
+            size: (device.is_self ? 1.2 : 1.05) * iconScale,
             isRouter: false,
             slot: index,
           };
@@ -1013,7 +1084,7 @@
         node.device = device;
         node.target = target;
         node.slot = index;
-        node.size = device.is_self ? 1.2 : 1.05;
+        node.size = (device.is_self ? 1.2 : 1.05) * iconScale;
       });
       nodes = nodes.filter((node) => alive.has(node.key));
       if (satellites.length !== lastSatelliteCount) {
@@ -1093,7 +1164,7 @@
           size: node.size,
           labeled: node.device.online !== false,
         });      }
-      const target = vec(0, 0.95, 0);
+      const target = viewTarget();
       const marginX = clamp(width * 0.07, 38, 96);
       const marginTop = 62;
       const marginBottom = 26;
@@ -1124,10 +1195,34 @@
 
     function applyFit() {
       const distance = fitDistance();
+      const target = viewTarget();
       cam.goalDist = distance;
       cam.dist = distance;
-      cam.target = vec(0, 0.95, 0);
-      cam.goalTarget = vec(0, 0.95, 0);
+      cam.target = vec(target.x, target.y, target.z);
+      cam.goalTarget = vec(target.x, target.y, target.z);
+    }
+
+    function retargetLayout() {
+      if (routerNode) routerNode.target = routerTarget();
+      for (const node of nodes) {
+        node.target = layout === "tree"
+          ? treeSlot(node.slot, nodes.length)
+          : slotPosition(node.slot, nodes.length);
+      }
+    }
+
+    function setLayout(name) {
+      layout = name === "tree" ? "tree" : "orbit";
+      const angles = layout === "tree" ? TREE_HOME : ORBIT_HOME;
+      cam.yaw = angles.yaw;
+      cam.pitch = angles.pitch;
+      userAdjusted = false;
+      hoverHit = null;
+      onHover(null);
+      retargetLayout();
+      needsFit = true;
+      applyFit();
+      if (!running) draw();
     }
 
     function curvePoint(a, c, b, t) {
@@ -1150,12 +1245,45 @@
       };
       if (routerNode) {
         apply(routerNode);
-        routerNode.animated.y = ROUTER_Y + (REDUCED_MOTION ? 0 : Math.sin(elapsed * 0.9) * 0.05);
+        const bob = REDUCED_MOTION ? 0 : Math.sin(elapsed * 0.9) * 0.05;
+        routerNode.animated.y = routerNode.pos.y + bob;
       }
       for (const node of nodes) apply(node);
     }
 
     // -- drawing ---------------------------------------------------------
+    /* The tree hangs in mid-air, so it gets a faint graph-paper plane behind
+     * it instead of the orbiting floor rings. */
+    function drawTreeBackdrop() {
+      const { cols, rows } = treeMetrics(nodes.length);
+      const halfW = Math.max(6, ((cols - 1) / 2) * TREE_COL_GAP + 2.6);
+      const top = TREE_TOP + 2.2;
+      const bottom = treeRowY(rows - 1) - 2.4;
+      const z = -2.6;
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = palette.grid;
+      for (let x = -halfW; x <= halfW + 0.01; x += 2) {
+        const a = project(vec(x, top, z));
+        const b = project(vec(x, bottom, z));
+        if (!a || !b) continue;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      for (let y = bottom; y <= top + 0.01; y += 2) {
+        const a = project(vec(-halfW, y, z));
+        const b = project(vec(halfW, y, z));
+        if (!a || !b) continue;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     function drawFloor() {
       ctx.save();
       ctx.lineWidth = 1;
@@ -1244,8 +1372,161 @@
       return focusTypes.includes(type);
     }
 
+    function pointOnPolyline(points, t) {
+      if (!points.length) return null;
+      if (points.length === 1) return points[0];
+      const lengths = [];
+      let total = 0;
+      for (let i = 1; i < points.length; i += 1) {
+        const length = Math.hypot(
+          points[i].x - points[i - 1].x, points[i].y - points[i - 1].y,
+        );
+        lengths.push(length);
+        total += length;
+      }
+      if (!total) return points[0];
+      let remaining = clamp(t, 0, 1) * total;
+      for (let i = 1; i < points.length; i += 1) {
+        const length = lengths[i - 1];
+        if (remaining <= length) {
+          const local = length ? remaining / length : 0;
+          return {
+            x: lerp(points[i - 1].x, points[i].x, local),
+            y: lerp(points[i - 1].y, points[i].y, local),
+          };
+        }
+        remaining -= length;
+      }
+      return points[points.length - 1];
+    }
+
+    /* Tree layout: every device gets its own elbow path from the router. The
+     * paths are offset into parallel lanes (x for the vertical run, y within
+     * the row for the horizontal run) so no two branch lines ever sit on top
+     * of one another. */
+    function treeBranches() {
+      const { cols } = treeMetrics(nodes.length);
+      const total = nodes.length;
+      const ordered = [...nodes].sort((a, b) => a.target.x - b.target.x);
+      const laneOf = new Map(ordered.map((node, index) => [node, index]));
+
+      const rows = new Map();
+      for (const node of nodes) {
+        const row = Math.floor(node.slot / cols);
+        if (!rows.has(row)) rows.set(row, []);
+        rows.get(row).push(node);
+      }
+
+      const branches = [];
+      for (const [row, rowNodes] of rows) {
+        const inRow = [...rowNodes].sort((a, b) => a.target.x - b.target.x);
+        inRow.forEach((node, index) => {
+          const lane = (laneOf.get(node) - (total - 1) / 2) * TREE_LANE_X;
+          const armY = treeRowY(row) + TREE_ARM_LIFT
+            + (index - (inRow.length - 1) / 2) * TREE_LANE_Y;
+          branches.push({ node, row, lane, armY });
+        });
+      }
+      return branches;
+    }
+
+    function drawTreeLinks() {
+      if (!routerNode) return;
+      const branches = treeBranches();
+      if (!branches.length) return;
+
+      const root = routerNode.animated;
+      const trunkTop = root.y - 0.95;
+
+      for (const branch of branches) {
+        const { node, lane, armY } = branch;
+        const style = styleFor(node.device, themeName);
+        const blocked = !!node.device.blocked;
+        const offline = node.device.online === false;
+        const hovered = hoverHit && hoverHit.type === "link" && hoverHit.key === node.key;
+        const selected = node.key === selectedKey;
+        const emphasized = isFocused(node.device) || hovered || selected;
+        const color = emphasized ? (blocked ? BLOCK_COLOR : style.color) : palette.dim;
+
+        const a = project(vec(lane, trunkTop, 0));
+        const b = project(vec(lane, armY, 0));
+        const c = project(vec(node.animated.x, armY, 0));
+        const d = project(vec(node.animated.x, node.animated.y, 0));
+        if (!a || !b || !c || !d) continue;
+
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // The cable stays neutral and solid until its branch is active; only
+        // the final drop carries the device colour and state.
+        ctx.setLineDash([]);
+        ctx.lineWidth = hovered || selected ? 2.2 : 1.2;
+        ctx.strokeStyle = rgba(color, emphasized ? (hovered || selected ? 0.6 : 0.3) : 0.1);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.stroke();
+
+        ctx.lineWidth = hovered || selected ? 2.4 : 1.6;
+        ctx.strokeStyle = rgba(
+          color, emphasized ? (offline ? 0.28 : (hovered || selected ? 0.85 : 0.6)) : 0.14,
+        );
+        if (!REDUCED_MOTION && (blocked || offline)) {
+          ctx.setLineDash(blocked ? [3, 7] : [4, 8]);
+          ctx.lineDashOffset = -((elapsed * 16 + node.phase * 6) % 13);
+        }
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y);
+        ctx.lineTo(d.x, d.y);
+        ctx.stroke();
+        ctx.restore();
+
+        // A junction dot marks where the branch leaves its lane.
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, Math.max(1.6, Math.min(3, c.scale / 26)), 0, TAU);
+        ctx.fillStyle = rgba(color, emphasized ? 0.85 : 0.4);
+        ctx.fill();
+
+        if (emphasized && !blocked && !offline && !REDUCED_MOTION
+          && (hovered || selected)) {
+          const path = [a, b, c, d];
+          for (let i = 0; i < 2; i += 1) {
+            const t = (elapsed * 0.22 + node.phase * 0.11 + i / 2) % 1;
+            const point = pointOnPolyline(path, t);
+            if (!point) continue;
+            const fade = Math.sin(t * Math.PI);
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 2.4, 0, TAU);
+            ctx.fillStyle = rgba(color, 0.85 * fade);
+            ctx.fill();
+          }
+        }
+
+        const points = [];
+        for (let i = 0; i <= 24; i += 1) {
+          const point = pointOnPolyline([a, b, c, d], i / 24);
+          if (point) points.push(point);
+        }
+        linkHits.push({
+          type: "link",
+          key: node.key,
+          node,
+          points,
+          mid: { x: c.x, y: c.y },
+          color,
+          blocked,
+        });
+      }
+    }
+
     function drawLinks() {
       if (!routerNode) return;
+      if (layout === "tree") {
+        drawTreeLinks();
+        return;
+      }
       for (const node of nodes) {
         const a = routerNode.animated;
         const b = node.animated;
@@ -1415,7 +1696,6 @@
           ? (routerInfo.model && routerInfo.model !== name ? routerInfo.model : "Gateway")
           : (device.ip || "no address"));
 
-      const y = point.y + s * 1.0 + 7;
       ctx.save();
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
@@ -1425,6 +1705,12 @@
       const subWidth = sub ? ctx.measureText(sub).width : 0;
       const boxW = Math.min(180, Math.max(nameWidth, subWidth) + 26);
       const boxH = compact ? 21 : 34;
+      // In tree view the router label sits above the shape so it never covers
+      // the branch cables leaving the router.
+      const above = layout === "tree" && node.isRouter;
+      const y = above
+        ? point.y - s * 1.0 - 7 - boxH
+        : point.y + s * 1.0 + 7;
       const boxX = clamp(point.x - boxW / 2, 8, Math.max(8, width - boxW - 8));
       const boxY = clamp(y, 8, Math.max(8, height - boxH - 8));
 
@@ -1515,7 +1801,11 @@
       if (device.blocked) drawBlockedBadge(ctx, s);
       ctx.restore();
 
-      const compact = !online && !selected && !hovered && !node.isRouter;
+      // Tree rows sit close together, so their labels are name-only unless
+      // the device is active; the detail panel still shows the address.
+      const compact = layout === "tree"
+        ? !node.isRouter && !selected && !hovered
+        : (!online && !selected && !hovered && !node.isRouter);
       if (emphasized) {
         labelQueue.push({
           node,
@@ -1549,18 +1839,22 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
-      drawFloor();
+      if (layout === "tree") {
+        drawTreeBackdrop();
+      } else {
+        drawFloor();
+      }
 
       const drawables = [];
       if (routerNode) {
         const point = project(routerNode.animated);
         if (point) drawables.push({ node: routerNode, point });
-        drawShadow(routerNode);
+        if (layout !== "tree") drawShadow(routerNode);
       }
       for (const node of nodes) {
         const point = project(node.animated);
         if (point) drawables.push({ node, point });
-        drawShadow(node);
+        if (layout !== "tree") drawShadow(node);
       }
 
       drawLinks();
@@ -1842,7 +2136,7 @@
       lastTime = now;
       elapsed += dt;
 
-      if (autoRotate && !REDUCED_MOTION) {
+      if (autoRotate && !REDUCED_MOTION && layout === "orbit") {
         cam.yaw += dt * 0.16;
       } else if (!REDUCED_MOTION) {
         if (Math.abs(orbitInertia.yaw) > 0.002) {
@@ -1912,14 +2206,20 @@
       if (!node) return;
       selectedKey = key;
       userAdjusted = true;
-      cam.goalTarget = vec(node.pos.x * 0.82, node.pos.y, node.pos.z * 0.82);
-      cam.goalDist = node.isRouter ? 20 : 15;
+      if (layout === "tree") {
+        cam.goalTarget = vec(node.pos.x, node.pos.y, 0);
+        cam.goalDist = node.isRouter ? 22 : 16;
+      } else {
+        cam.goalTarget = vec(node.pos.x * 0.82, node.pos.y, node.pos.z * 0.82);
+        cam.goalDist = node.isRouter ? 20 : 15;
+      }
       setHover(null);
     }
 
     function reset() {
-      cam.yaw = home.yaw;
-      cam.pitch = home.pitch;
+      const angles = layout === "tree" ? TREE_HOME : ORBIT_HOME;
+      cam.yaw = angles.yaw;
+      cam.pitch = angles.pitch;
       userAdjusted = false;
       applyFit();
       cam.target = vec(cam.goalTarget.x, cam.goalTarget.y, cam.goalTarget.z);
@@ -1936,7 +2236,8 @@
     }
 
     function setAutoRotate(value) {
-      autoRotate = !!value;
+      // A flat tree spinning around its trunk reads as noise, not motion.
+      autoRotate = layout === "tree" ? false : !!value;
       if (autoRotate) {
         orbitInertia.yaw = 0;
         orbitInertia.pitch = 0;
@@ -1970,6 +2271,8 @@
       fit,
       zoomBy,
       setAutoRotate,
+      setLayout,
+      getLayout: () => layout,
       getAutoRotate: () => autoRotate,
       types: TYPES,
       redraw: () => { if (!running) draw(); },

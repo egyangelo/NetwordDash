@@ -7,7 +7,7 @@ click.
 No third-party packages, no cloud service, no telemetry. Just Python 3 and your
 browser.
 
-![NetDash dashboard: connection, this computer, gateway and DNS summary above the device list](netdash/docs/screen-04.png)
+![NetDash dashboard: connection, this computer, gateway and DNS summary above the device list](app/netdash/docs/screen-04.png)
 
 ## Quick start
 
@@ -86,9 +86,9 @@ consoles. Anything unrecognised becomes a cube. The scene spans the full browser
 width and height below the header in the normal 3D tab (the footer is hidden
 there); the expand button makes it truly fullscreen.
 
-![The same network in the default orbit layout](netdash/docs/screen-01.png)
+![The same network in the default orbit layout](app/netdash/docs/screen-01.png)
 
-![The same network in tree layout: every device on its own offset branch](netdash/docs/screen-02.png)
+![The same network in tree layout: every device on its own offset branch](app/netdash/docs/screen-02.png)
 
 Devices are classified from their hostname and vendor — `LAPTOP-…`, `iPad`,
 `Galaxy-Tab`, `iPhone`, `Samsung TV`, `Smart Light`, `DoorBell`, `Xbox-…`,
@@ -171,7 +171,7 @@ It uses Cloudflare's public endpoints (`speed.cloudflare.com`), so the test
 traffic goes to Cloudflare. Expect roughly 10-30 MB of data and 10-40 seconds
 depending on the line. The last result stays in memory until the app restarts.
 
-![DNS profiles and speed-test results](netdash/docs/screen-05.png)
+![DNS profiles and speed-test results](app/netdash/docs/screen-05.png)
 
 ## Router control
 
@@ -199,7 +199,7 @@ disables **WLAN access-control editing** there: the page unbinds its rule Apply
 button and the policy endpoint rejects POSTs, so the Wi-Fi switches stay locked.
 That is a firmware restriction, not a NetDash choice.
 
-![Blocking a device from the 3D map, with its detail panel open](netdash/docs/screen-03.png)
+![Blocking a device from the 3D map, with its detail panel open](app/netdash/docs/screen-03.png)
 
 You can confirm both from **Settings → Test router control**: it writes and
 removes a rule for a reserved MAC (`02:00:00:00:00:01`) and restores the router's

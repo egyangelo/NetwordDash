@@ -7,7 +7,7 @@ click.
 No third-party packages, no cloud service, no telemetry. Just Python 3 and your
 browser.
 
-![overview](docs/overview.jpg)
+![NetDash dashboard: connection, this computer, gateway and DNS summary above the device list](netdash/docs/screen-04.png)
 
 ## Quick start
 
@@ -71,6 +71,11 @@ Use the **Auto / Light / Dark** switch in the header. Auto follows the operating
 system and updates live if it changes; Light and Dark stay put. The choice is
 stored in the browser, and the 3D map re-themes with the rest of the page.
 
+**Settings → Display** holds the per-browser display options: whether device
+MAC addresses are shown or masked, and the device icon size (100% down to 50%).
+The icon size applies to the device chips in the table and to the shapes in
+both 3D layouts.
+
 ## 3D network map
 
 The **3D Map** tab turns the device list into a navigable scene. The router sits
@@ -80,6 +85,10 @@ smart lights, speakers, printers, and gamepads for Xbox, PlayStation and other
 consoles. Anything unrecognised becomes a cube. The scene spans the full browser
 width and height below the header in the normal 3D tab (the footer is hidden
 there); the expand button makes it truly fullscreen.
+
+![The same network in the default orbit layout](netdash/docs/screen-01.png)
+
+![The same network in tree layout: every device on its own offset branch](netdash/docs/screen-02.png)
 
 Devices are classified from their hostname and vendor — `LAPTOP-…`, `iPad`,
 `Galaxy-Tab`, `iPhone`, `Samsung TV`, `Smart Light`, `DoorBell`, `Xbox-…`,
@@ -93,6 +102,13 @@ angular gaps of the ring inside it, so the links stay separated instead of
 overlapping. In dense views, labels that would collide are skipped; hover or
 click a figure to identify it.
 
+- **Layout:** the **Orbit / Tree** switch in the top-right corner changes the
+  arrangement. **Orbit** is the radial map around the router; **Tree** arranges
+  the devices in a grid under the router, one branch per device. Each branch
+  leaves the router in its own lane, turns at its own height in the row, and
+  drops into the device in that device's colour, so no two lines sit on top of
+  each other. Tree view is remembered per browser, and auto-rotation is
+  switched off there because a spinning flat tree reads as noise.
 - **Orbit:** drag. **Pan:** Shift-drag or right-drag. **Zoom:** scroll or pinch.
   Arrow keys orbit, `+` / `-` zoom, and `0` or `R` resets the camera.
 - **Full screen:** the expand button in the top-right corner (or `F` while the
@@ -155,6 +171,8 @@ It uses Cloudflare's public endpoints (`speed.cloudflare.com`), so the test
 traffic goes to Cloudflare. Expect roughly 10-30 MB of data and 10-40 seconds
 depending on the line. The last result stays in memory until the app restarts.
 
+![DNS profiles and speed-test results](netdash/docs/screen-05.png)
+
 ## Router control
 
 A normal client PC cannot cut another device's traffic by itself; only the
@@ -180,6 +198,8 @@ blocking works** (the firewall MAC filter accepts writes and is verified). ZTE
 disables **WLAN access-control editing** there: the page unbinds its rule Apply
 button and the policy endpoint rejects POSTs, so the Wi-Fi switches stay locked.
 That is a firmware restriction, not a NetDash choice.
+
+![Blocking a device from the 3D map, with its detail panel open](netdash/docs/screen-03.png)
 
 You can confirm both from **Settings → Test router control**: it writes and
 removes a rule for a reserved MAC (`02:00:00:00:00:01`) and restores the router's
@@ -236,6 +256,7 @@ app/
       zte.py               ZTE F-series adapter (login, client list)
     static/                HTML, CSS, vanilla JS
     data/oui.txt           IEEE OUI registry (offline vendor lookup)
+    docs/                  screenshots used by this README
   build_pyz.sh             builds netdash.pyz from the sources
 ```
 
