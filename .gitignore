@@ -1,0 +1,9 @@
+# Byte-compiled Python
+__pycache__/
+*.py[cod]
+
+# Build artifact (reproduce with ./build_pyz.sh)
+netdash.pyz
+
+# Router diagnostics contain MAC/IP addresses of the local network
+router-diagnostics.json
